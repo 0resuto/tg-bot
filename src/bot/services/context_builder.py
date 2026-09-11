@@ -17,14 +17,16 @@ class ContextBuilder:
         window_minutes: int = 15,
         min_messages: int = 10,
         max_buffer_size: int = 100,
+        ttl_seconds: int = 86400 * 14,
     ) -> None:
         self.redis = redis_client
         self.window_minutes = window_minutes
         self.min_messages = min_messages
         self.max_buffer_size = max_buffer_size
+        self.ttl_seconds = ttl_seconds
 
     async def add_message(self, msg: ChatMessage) -> None:
-        """Push a message to the Redis list and trim to max_buffer_size."""
+        """Push a message to the Redis list, trim to max_buffer_size, and set TTL."""
         redis_key = f"context:{msg.chat_id}"
 
         msg_dict = {
@@ -41,6 +43,8 @@ class ContextBuilder:
         pipeline = self.redis.pipeline()
         pipeline.rpush(redis_key, raw_msg)
         pipeline.ltrim(redis_key, -self.max_buffer_size, -1)
+        if self.ttl_seconds > 0:
+            pipeline.expire(redis_key, self.ttl_seconds)
         await pipeline.execute()
 
     async def get_context(self, chat_id: int) -> list[ChatMessage]:

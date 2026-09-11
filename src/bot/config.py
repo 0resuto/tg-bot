@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     debounce_seconds: float = 10.0
     context_window_minutes: int = 15
     context_min_messages: int = 10
+    context_ttl_seconds: int = 86400 * 14  # 14 days
     proactive_replies_enabled: bool = False
     memory_search_limit_quick: int = 5
     memory_search_limit_deep: int = 15

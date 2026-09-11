@@ -115,6 +115,7 @@ async def main() -> None:
         redis_client=redis_client,
         window_minutes=settings.context_window_minutes,
         min_messages=settings.context_min_messages,
+        ttl_seconds=settings.context_ttl_seconds,
     )
 
     admin_notifier = AdminNotifier(admin_chat_id=settings.admin_chat_id)

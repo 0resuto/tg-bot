@@ -93,6 +93,7 @@ class WebContainer:
                     redis_client=self.redis,
                     window_minutes=int(self.settings.context_window_minutes),
                     min_messages=int(self.settings.context_min_messages),
+                    ttl_seconds=int(self.settings.context_ttl_seconds),
                 )
             except Exception as exc:
                 logger.error("Failed to initialize Redis in WebContainer", error=str(exc))

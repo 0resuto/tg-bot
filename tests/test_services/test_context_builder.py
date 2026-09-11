@@ -55,3 +55,29 @@ async def test_context_builder(fake_redis):
     assert len(context_filtered) == 2
     assert context_filtered[0].text == "Recent message"
     assert context_filtered[1].text == "Another recent message"
+
+
+async def test_context_builder_sets_redis_ttl(fake_redis):
+    """Verify that add_message sets an expiration TTL on the Redis context key."""
+    ttl_seconds = 3600
+    builder = ContextBuilder(
+        redis_client=fake_redis,
+        window_minutes=15,
+        min_messages=2,
+        ttl_seconds=ttl_seconds,
+    )
+
+    msg = ChatMessage(
+        chat_id=200,
+        user_id=1,
+        text="Hello TTL",
+        timestamp=datetime.now(UTC),
+        message_id=1,
+        display_name="Tester",
+    )
+    await builder.add_message(msg)
+
+    key = "context:200"
+    ttl = await fake_redis.ttl(key)
+    assert ttl > 0
+    assert ttl <= ttl_seconds

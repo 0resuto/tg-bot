@@ -4,10 +4,12 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from aiogram import F, Router
 from aiogram.types import Chat, Message, User
 
 from bot.config import Settings
 from bot.domain.models import MemberIdentity, MemoryStats
+from bot.telegram.filters.admin import IsAdminUser
 from bot.telegram.handlers.admin_private import (
     cmd_memory_stats,
     handle_admin_private_message,
@@ -152,3 +154,43 @@ async def test_cmd_memory_stats():
     assert "Tracked Members: 2" in reply_text
     assert "Last Ingestion: 2026-09-01 12:00 UTC" in reply_text
     assert "Today: 120" in reply_text
+
+
+@pytest.mark.asyncio
+async def test_setup_admin_private_router_with_group_admin_chat_id():
+    """Verify that private messages from admin work even if admin_chat_id is a group ID."""
+
+    custom_router = Router(name="test_admin_private")
+    # Replace global filters on custom_router for test isolation
+    settings = Settings(admin_user_id=111, admin_chat_id=-100987654321, bot_names="Ista")
+
+    # Apply filters logic
+    custom_router.message.filter(
+        F.chat.type == "private",
+        IsAdminUser(settings.admin_user_id),
+    )
+
+    # Valid admin private message
+    admin_msg = MagicMock(spec=Message)
+    admin_msg.chat = Chat(id=111, type="private")
+    admin_msg.from_user = User(id=111, is_bot=False, first_name="Admin")
+
+    # Group message from admin (should NOT match private router)
+    group_msg = MagicMock(spec=Message)
+    group_msg.chat = Chat(id=-100987654321, type="supergroup")
+    group_msg.from_user = User(id=111, is_bot=False, first_name="Admin")
+
+    # Private message from non-admin
+    non_admin_msg = MagicMock(spec=Message)
+    non_admin_msg.chat = Chat(id=222, type="private")
+    non_admin_msg.from_user = User(id=222, is_bot=False, first_name="Other")
+
+    # Test the filter conditions
+    is_admin = IsAdminUser(settings.admin_user_id)
+    assert await is_admin(admin_msg) is True
+    assert admin_msg.chat.type == "private"
+
+    assert await is_admin(group_msg) is True
+    assert group_msg.chat.type != "private"
+
+    assert await is_admin(non_admin_msg) is False

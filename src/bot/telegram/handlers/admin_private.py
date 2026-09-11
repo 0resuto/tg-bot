@@ -13,7 +13,7 @@ from aiogram.types import Message
 
 from bot.config import Settings  # type: ignore
 from bot.domain.models import ChatMessage, MemberIdentity
-from bot.telegram.filters.admin import IsAdminChat, IsAdminUser
+from bot.telegram.filters.admin import IsAdminUser
 
 logger = structlog.get_logger(__name__)
 
@@ -21,9 +21,8 @@ admin_private_router = Router(name="admin_private")
 
 
 def setup_admin_private_router(settings: Settings) -> None:
-    admin_chat_id = settings.admin_chat_id or settings.admin_user_id
     admin_private_router.message.filter(
-        IsAdminChat(admin_chat_id),
+        F.chat.type == "private",
         IsAdminUser(settings.admin_user_id),
     )
 

@@ -7,8 +7,9 @@ import pytest
 from aiogram.types import Chat, Message, User
 
 from bot.config import Settings
-from bot.domain.models import MemberIdentity
+from bot.domain.models import MemberIdentity, MemoryStats
 from bot.telegram.handlers.admin_private import (
+    cmd_memory_stats,
     handle_admin_private_message,
 )
 
@@ -101,3 +102,53 @@ async def test_handle_admin_private_message():
     assert added_messages[0].display_name == "Admin"
     assert added_messages[1].text == "Алиса обожает флэт уайт!"
     assert added_messages[1].display_name == "Ista"
+
+
+@pytest.mark.asyncio
+async def test_cmd_memory_stats():
+    mock_user = User(id=111, is_bot=False, first_name="Admin", username="admin_user")
+    mock_chat = Chat(id=111, type="private")
+
+    message = MagicMock(spec=Message)
+    message.from_user = mock_user
+    message.chat = mock_chat
+    message.reply = AsyncMock()
+
+    class MockMemoryService:
+        async def get_stats(self, chat_id: int):
+            return MemoryStats(
+                total_entities=5,
+                total_relations=10,
+                total_episodes=3,
+                last_ingestion_at=datetime(2026, 9, 1, 12, 0, tzinfo=UTC),
+            )
+
+    class MockTokenRepo:
+        async def get_usage_stats(self, chat_id: int, days: int = 30):
+            return {"today_tokens": 120, "week_tokens": 600, "month_tokens": 2500}
+
+    class MockChatRepo:
+        async def get_active_chat_ids(self):
+            return [-100123456]
+
+    class MockMemberRepo:
+        async def get_members_by_chat(self, chat_id: int):
+            return [
+                MemberIdentity(telegram_user_id=1, username="u1", first_name="User1"),
+                MemberIdentity(telegram_user_id=2, username="u2", first_name="User2"),
+            ]
+
+    await cmd_memory_stats(
+        message=message,
+        memory_service=MockMemoryService(),
+        token_repo=MockTokenRepo(),
+        chat_repo=MockChatRepo(),
+        member_repo=MockMemberRepo(),
+    )
+
+    message.reply.assert_awaited_once()
+    reply_text = message.reply.call_args[0][0]
+    assert "Entities / Relations / Episodes: 5 / 10 / 3" in reply_text
+    assert "Tracked Members: 2" in reply_text
+    assert "Last Ingestion: 2026-09-01 12:00 UTC" in reply_text
+    assert "Today: 120" in reply_text

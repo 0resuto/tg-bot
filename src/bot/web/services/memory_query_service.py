@@ -100,7 +100,15 @@ class MemoryQueryService:
         mem_stats: dict[str, Any] = {"status": "offline"}
         if self.memory_service and chat_id is not None:
             try:
-                mem_stats = await self.memory_service.get_stats(chat_id)
+                stats = await self.memory_service.get_stats(chat_id)
+                mem_stats = {
+                    "total_entities": stats.total_entities,
+                    "total_relations": stats.total_relations,
+                    "total_episodes": stats.total_episodes,
+                    "last_ingestion_at": (
+                        stats.last_ingestion_at.isoformat() if stats.last_ingestion_at else None
+                    ),
+                }
             except Exception as exc:
                 mem_stats = {"status": "error", "error": str(exc)}
 

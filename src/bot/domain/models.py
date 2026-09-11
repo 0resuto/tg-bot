@@ -72,3 +72,13 @@ class TokenUsageRecord:
     operation: OperationType
     telegram_user_id: int | None = None
     timestamp: datetime = field(default_factory=_utcnow)
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryStats:
+    """Aggregated statistics for a chat's knowledge graph partition."""
+
+    total_entities: int = 0
+    total_relations: int = 0
+    total_episodes: int = 0
+    last_ingestion_at: datetime | None = None

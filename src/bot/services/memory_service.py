@@ -5,7 +5,7 @@ from datetime import datetime
 
 import redis.asyncio as redis
 
-from bot.domain.models import ChatMessage, MemoryFact
+from bot.domain.models import ChatMessage, MemoryFact, MemoryStats
 from bot.interfaces.memory import MemoryBackend
 from bot.log import get_logger
 from bot.repositories.token_usage_repo import TokenUsageRepository
@@ -143,10 +143,10 @@ class MemoryService:
             logger.error("Error deleting facts", exc_info=e, chat_id=chat_id)
             return 0
 
-    async def get_stats(self, chat_id: int) -> dict:
+    async def get_stats(self, chat_id: int) -> MemoryStats:
         """Get stats for a specific chat group."""
         try:
             return await self.memory.get_stats(group_id=str(chat_id))
         except Exception as e:
             logger.error("Error getting memory stats", exc_info=e, chat_id=chat_id)
-            return {}
+            return MemoryStats()

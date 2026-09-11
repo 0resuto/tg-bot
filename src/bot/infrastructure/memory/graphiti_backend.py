@@ -17,7 +17,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from bot.domain.models import MemoryFact
+from bot.domain.models import MemoryFact, MemoryStats
 from bot.interfaces import MemoryBackend
 
 logger = structlog.get_logger()
@@ -210,25 +210,51 @@ class GraphitiMemoryBackend(MemoryBackend):
         retry=retry_if_exception_type(Exception),
         reraise=True,
     )
-    async def get_stats(self, group_id: str) -> dict[str, Any]:
+    async def get_stats(self, group_id: str) -> MemoryStats:
         """Get graph statistics for the given group."""
         import asyncio
 
         from neo4j import GraphDatabase
 
-        def _fetch_stats() -> dict[str, Any]:
+        def _fetch_stats() -> MemoryStats:
             driver = GraphDatabase.driver(
                 self.neo4j_uri, auth=(self.neo4j_user, self.neo4j_password)
             )
             try:
                 with driver.session() as session:
-                    nodes_res = session.run("MATCH (n) RETURN count(n) as cnt").single()
-                    edges_res = session.run("MATCH ()-[r]->() RETURN count(r) as cnt").single()
-                    return {
-                        "group_id": group_id,
-                        "nodes": int(nodes_res["cnt"]) if nodes_res else 0,
-                        "edges": int(edges_res["cnt"]) if edges_res else 0,
-                    }
+                    entities_res = session.run(
+                        "MATCH (n) WHERE n.group_id = $group_id RETURN count(n) as cnt",
+                        {"group_id": group_id},
+                    ).single()
+                    relations_res = session.run(
+                        "MATCH ()-[r]->() WHERE r.group_id = $group_id RETURN count(r) as cnt",
+                        {"group_id": group_id},
+                    ).single()
+                    episodes_res = session.run(
+                        "MATCH (e:Episode) WHERE e.group_id = $group_id "
+                        "RETURN count(e) as cnt, max(e.created_at) as last_ingested",
+                        {"group_id": group_id},
+                    ).single()
+
+                    last_ingested = None
+                    if episodes_res and episodes_res["last_ingested"]:
+                        raw_ts = episodes_res["last_ingested"]
+                        if hasattr(raw_ts, "to_native"):
+                            last_ingested = raw_ts.to_native()
+                        elif isinstance(raw_ts, datetime):
+                            last_ingested = raw_ts
+                        elif isinstance(raw_ts, str):
+                            try:
+                                last_ingested = datetime.fromisoformat(raw_ts)
+                            except Exception:
+                                last_ingested = None
+
+                    return MemoryStats(
+                        total_entities=int(entities_res["cnt"]) if entities_res else 0,
+                        total_relations=int(relations_res["cnt"]) if relations_res else 0,
+                        total_episodes=int(episodes_res["cnt"]) if episodes_res else 0,
+                        last_ingestion_at=last_ingested,
+                    )
             finally:
                 driver.close()
 

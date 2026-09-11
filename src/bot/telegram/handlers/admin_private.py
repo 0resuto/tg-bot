@@ -61,6 +61,7 @@ async def cmd_memory_stats(
     memory_service: Any,
     token_repo: Any,
     chat_repo: Any,
+    member_repo: Any,
 ) -> None:
     active_chats = await chat_repo.get_active_chat_ids()
     if not active_chats:
@@ -72,12 +73,20 @@ async def cmd_memory_stats(
     try:
         mem_stats = await memory_service.get_stats(chat_id=target_chat_id)
         token_stats = await token_repo.get_usage_stats(chat_id=target_chat_id, days=30)
+        members = await member_repo.get_members_by_chat(target_chat_id)
+        tracked_count = len(members)
+
+        last_ingestion_str = (
+            mem_stats.last_ingestion_at.strftime("%Y-%m-%d %H:%M UTC")
+            if mem_stats.last_ingestion_at
+            else "Never"
+        )
 
         reply_text = (
             "Memory Stats:\n"
-            f"- Facts/Entities/Relations: {mem_stats.get('facts', 0)} / {mem_stats.get('entities', 0)} / {mem_stats.get('relations', 0)}\n"
-            f"- Tracked Members: {mem_stats.get('tracked_members', 0)}\n"
-            f"- Last Ingestion: {mem_stats.get('last_ingestion', 'Never')}\n\n"
+            f"- Entities / Relations / Episodes: {mem_stats.total_entities} / {mem_stats.total_relations} / {mem_stats.total_episodes}\n"
+            f"- Tracked Members: {tracked_count}\n"
+            f"- Last Ingestion: {last_ingestion_str}\n\n"
             "Token Usage (30 days):\n"
             f"- Today: {token_stats.get('today_tokens', 0)}\n"
             f"- This Week: {token_stats.get('week_tokens', 0)}\n"

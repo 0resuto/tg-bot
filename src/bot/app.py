@@ -206,7 +206,9 @@ async def main() -> None:
 
     # 8. Start polling
     try:
-        await dp.start_polling(bot, allowed_updates=["message", "edited_message", "callback_query"])
+        await dp.start_polling(
+            bot, allowed_updates=["message", "edited_message", "callback_query", "my_chat_member"]
+        )
     except (KeyboardInterrupt, SystemExit):
         logger.info("Bot stopped by user.")
     except Exception:

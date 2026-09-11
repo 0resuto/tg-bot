@@ -8,9 +8,9 @@ logic.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Protocol
 
-from bot.domain.models import MemoryFact
+from bot.domain.models import MemoryFact, MemoryStats
 
 
 class MemoryBackend(Protocol):
@@ -77,10 +77,6 @@ class MemoryBackend(Protocol):
     async def get_stats(
         self,
         group_id: str,
-    ) -> dict[str, Any]:
-        """Return memory statistics for the given chat namespace.
-
-        Expected keys: ``total_entities``, ``total_relations``,
-        ``total_episodes``.
-        """
+    ) -> MemoryStats:
+        """Return memory statistics for the given chat namespace."""
         ...

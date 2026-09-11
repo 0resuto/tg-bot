@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
 from bot.domain.enums import OperationType
-from bot.domain.models import MemoryFact, TokenUsageRecord
+from bot.domain.models import MemoryFact, MemoryStats, TokenUsageRecord
 
 
 class MockLLMProvider:
@@ -54,7 +54,12 @@ class MockMemoryBackend:
         return before - len(self.facts)
 
     async def get_stats(self, group_id):
-        return {"total_entities": 5, "total_relations": 10, "total_episodes": 3}
+        return MemoryStats(
+            total_entities=5,
+            total_relations=10,
+            total_episodes=3,
+            last_ingestion_at=datetime(2026, 9, 1, 12, 0, tzinfo=UTC),
+        )
 
 
 class MockTokenUsageRepo:

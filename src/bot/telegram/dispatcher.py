@@ -29,13 +29,19 @@ def create_dispatcher(
     dp.update.outer_middleware(allowlist)
     dp["allowlist"] = allowlist
 
+    # Expose allowlist to handlers so they can dynamically add/remove chats
+    services["allowlist"] = allowlist
+
     rate_limiter = RateLimitMiddleware(
         redis=redis_client, max_per_minute=settings.rate_limit_messages_per_minute
     )
     dp.message.outer_middleware(rate_limiter)
 
+    # Inject services into message, callback_query and my_chat_member handlers
     services_mw = ServicesMiddleware(services=services)
     dp.message.middleware(services_mw)
+    dp.callback_query.middleware(services_mw)
+    dp.my_chat_member.middleware(services_mw)
 
     setup_routers(dp, settings)
 

@@ -24,10 +24,15 @@ COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
 COPY alembic.ini .
 COPY alembic/ alembic/
+COPY prompts/ prompts/
+COPY frontend/ frontend/
 
 # Ensure the virtual environment is in PATH and src is in PYTHONPATH
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/src"
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/health')" || exit 1
 
 # Run as non-root user
 USER botuser

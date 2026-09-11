@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     openai_response_model: str = "gpt-4o"
     openai_extraction_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
+    openai_timeout_seconds: float = 60.0
 
     # -- PostgreSQL --------------------------------------------------------
     postgres_host: str = "postgres"

@@ -86,6 +86,7 @@ async def main() -> None:
         api_key=settings.openai_api_key,
         default_model=settings.openai_response_model,
         default_chat_id=settings.admin_chat_id or 0,
+        timeout=settings.openai_timeout_seconds,
     )
 
     task_runner = AsyncioTaskRunner()

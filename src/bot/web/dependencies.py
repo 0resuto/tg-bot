@@ -103,6 +103,7 @@ class WebContainer:
                 api_key=self.settings.openai_api_key,
                 default_model=self.settings.openai_response_model,
                 default_chat_id=self.settings.admin_chat_id or 0,
+                timeout=self.settings.openai_timeout_seconds,
             )
 
         # Graphiti / Neo4j

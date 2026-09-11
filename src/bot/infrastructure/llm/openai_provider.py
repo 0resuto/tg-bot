@@ -24,10 +24,17 @@ logger = structlog.get_logger()
 class OpenAILLMProvider(LLMProvider):
     """OpenAI implementation of the LLMProvider protocol."""
 
-    def __init__(self, api_key: str, default_model: str, default_chat_id: int = 0):
-        self.client = openai.AsyncOpenAI(api_key=api_key)
+    def __init__(
+        self,
+        api_key: str,
+        default_model: str,
+        default_chat_id: int = 0,
+        timeout: float = 60.0,
+    ):
+        self.client = openai.AsyncOpenAI(api_key=api_key, timeout=timeout)
         self.default_model = default_model
         self.default_chat_id = default_chat_id
+        self.timeout = timeout
 
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -37,6 +44,7 @@ class OpenAILLMProvider(LLMProvider):
                 openai.RateLimitError,
                 openai.APIConnectionError,
                 openai.InternalServerError,
+                openai.APITimeoutError,
             )
         ),
         reraise=True,

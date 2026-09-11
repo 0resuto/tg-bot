@@ -136,10 +136,7 @@ async def main() -> None:
     async def on_flush_debouncer(chat_id: int, user_id: int, messages: list[ChatMessage]) -> None:
         """Callback for debouncer when messages are flushed."""
         logger.info("Flushing %d messages for chat %s user %s", len(messages), chat_id, user_id)
-        task_runner.schedule(
-            memory_service.ingest_messages(chat_id, user_id, messages),
-            name=f"ingest_{chat_id}_{user_id}",
-        )
+        await memory_service.ingest_messages(chat_id, user_id, messages)
 
     debouncer = MessageDebouncer(
         redis_client=redis_client,

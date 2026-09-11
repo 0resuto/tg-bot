@@ -14,6 +14,7 @@ from aiogram.types import Message
 from bot.config import Settings  # type: ignore
 from bot.domain.models import ChatMessage, MemberIdentity
 from bot.telegram.filters.admin import IsAdminUser
+from bot.telegram.media import extract_message_content
 
 logger = structlog.get_logger(__name__)
 
@@ -97,7 +98,7 @@ async def cmd_memory_stats(
         await message.reply("Failed to retrieve statistics due to an error.")
 
 
-@admin_private_router.message(F.text, ~F.text.startswith("/"))
+@admin_private_router.message(~F.text.startswith("/"))
 async def handle_admin_private_message(
     message: Message,
     member_repo: Any,
@@ -107,7 +108,8 @@ async def handle_admin_private_message(
     settings: Settings,
 ) -> None:
     """Handle 1-on-1 private chat messages with the admin using shared group memory."""
-    if not message.from_user or not message.text:
+    text = extract_message_content(message, language=settings.bot_language)
+    if not message.from_user or not text:
         return
 
     identity = MemberIdentity(
@@ -121,7 +123,7 @@ async def handle_admin_private_message(
     chat_msg = ChatMessage(
         chat_id=message.chat.id,
         user_id=message.from_user.id,
-        text=message.text,
+        text=text,
         timestamp=message.date,
         message_id=message.message_id,
         display_name=identity.display_name,
@@ -152,8 +154,8 @@ async def handle_admin_private_message(
                     m.display_name
                     and m.display_name not in active_user_names
                     and (
-                        m.display_name.lower() in message.text.lower()
-                        or (m.username and m.username.lower() in message.text.lower())
+                        m.display_name.lower() in text.lower()
+                        or (m.username and m.username.lower() in text.lower())
                     )
                 ):
                     active_user_names.append(m.display_name)

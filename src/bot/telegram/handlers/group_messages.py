@@ -11,7 +11,8 @@ from aiogram import F, Router
 from aiogram.enums import ChatType as EnumChatType
 from aiogram.types import Message
 
-from bot.domain.models import ChatMessage, MemberIdentity  # type: ignore
+from bot.domain.models import ChatMessage, MemberIdentity
+from bot.telegram.media import extract_message_content
 
 logger = structlog.get_logger(__name__)
 
@@ -19,7 +20,7 @@ group_messages_router = Router(name="group_messages")
 
 
 @group_messages_router.message(
-    F.chat.type.in_({EnumChatType.GROUP, EnumChatType.SUPERGROUP}), F.text
+    F.chat.type.in_({EnumChatType.GROUP, EnumChatType.SUPERGROUP}),
 )
 async def handle_group_message(
     message: Message,
@@ -29,7 +30,8 @@ async def handle_group_message(
     mention_detector: Any,
     response_service: Any,
 ) -> None:
-    if not message.from_user or not message.text:
+    text = extract_message_content(message)
+    if not message.from_user or not text:
         return
 
     identity = MemberIdentity(
@@ -45,7 +47,7 @@ async def handle_group_message(
     chat_msg = ChatMessage(
         chat_id=message.chat.id,
         user_id=message.from_user.id,
-        text=message.text,
+        text=text,
         timestamp=message.date,
         message_id=message.message_id,
         display_name=identity.display_name,
@@ -60,9 +62,10 @@ async def handle_group_message(
     if message.reply_to_message and message.reply_to_message.from_user:
         reply_to_user_id = message.reply_to_message.from_user.id
 
+    entities = message.entities or message.caption_entities
     is_mentioned = mention_detector.is_addressed(
-        text=message.text,
-        entities=message.entities,
+        text=text,
+        entities=entities,
         reply_to_user_id=reply_to_user_id,
     )
 

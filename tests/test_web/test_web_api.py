@@ -23,8 +23,8 @@ async def test_web_config_defaults():
 
 class TestDashboardServer(AioHTTPTestCase):
     async def get_application(self):
-        self.web_config = WebConfig(enable_simulator=False)
-        self.settings = Settings()
+        self.web_config = WebConfig(enable_simulator=False, api_key="")
+        self.settings = Settings(web_api_key="")
 
         self.container = MagicMock(spec=WebContainer)
         self.container.is_initialized = True
@@ -121,8 +121,8 @@ class TestDashboardServer(AioHTTPTestCase):
 
 class TestSimulatorEnabledServer(AioHTTPTestCase):
     async def get_application(self):
-        self.web_config = WebConfig(enable_simulator=True)
-        self.settings = Settings()
+        self.web_config = WebConfig(enable_simulator=True, api_key="")
+        self.settings = Settings(web_api_key="")
 
         self.container = MagicMock(spec=WebContainer)
         self.container.is_initialized = True
@@ -174,3 +174,59 @@ class TestSimulatorEnabledServer(AioHTTPTestCase):
         assert len(chats) >= 1
         assert chats[0]["chat_id"] == SIMULATOR_CHAT_ID
         assert "Simulator" in chats[0]["title"]
+
+
+class TestAuthenticatedDashboardServer(AioHTTPTestCase):
+    """Test API authentication enforcement when web_api_key is configured."""
+
+    async def get_application(self):
+        self.web_config = WebConfig(enable_simulator=False, api_key="test-secret-key")
+        self.settings = Settings(web_api_key="test-secret-key")
+
+        self.container = MagicMock(spec=WebContainer)
+        self.container.is_initialized = True
+        self.container.config = self.web_config
+        self.container.settings = self.settings
+
+        self.health_service = MagicMock()
+        self.health_service.all_ready = True
+        self.health_service.items = []
+        self.health_service.check_all = AsyncMock(
+            return_value={"all_ready": True, "items": [], "checked_at": "2026-09-11T12:00:00Z"}
+        )
+        self.container.health_service = self.health_service
+        self.container.graph_service = None
+        self.container.memory_query_service = None
+        self.container.simulator_service = None
+        self.container.session_factory = None
+
+        return create_web_app(container=self.container, config=self.web_config)
+
+    async def test_unauthenticated_request_rejected(self):
+        resp = await self.client.request("GET", "/api/chats")
+        assert resp.status == 401
+        data = await resp.json()
+        assert "Unauthorized" in data.get("error", "")
+
+    async def test_invalid_api_key_rejected(self):
+        resp = await self.client.request("GET", "/api/chats", headers={"X-API-Key": "wrong-key"})
+        assert resp.status == 401
+
+    async def test_valid_x_api_key_accepted(self):
+        resp = await self.client.request(
+            "GET", "/api/chats", headers={"X-API-Key": "test-secret-key"}
+        )
+        assert resp.status == 200
+
+    async def test_valid_bearer_token_accepted(self):
+        resp = await self.client.request(
+            "GET", "/api/chats", headers={"Authorization": "Bearer test-secret-key"}
+        )
+        assert resp.status == 200
+
+    async def test_health_endpoints_remain_public(self):
+        resp_health = await self.client.request("GET", "/api/health")
+        assert resp_health.status == 200
+
+        resp_check = await self.client.request("GET", "/api/checklist")
+        assert resp_check.status == 200

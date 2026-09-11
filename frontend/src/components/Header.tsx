@@ -1,5 +1,7 @@
 import React from 'react';
+import { api } from '../services/api';
 import { StatsResponse } from '../types';
+
 
 interface HeaderProps {
   stats: StatsResponse | null;
@@ -62,7 +64,25 @@ export const Header: React.FC<HeaderProps> = ({
           </strong>
         </div>
 
+        {/* API Key configuration button */}
+        <button
+          onClick={() => {
+            const current = api.getApiKey();
+            const input = prompt('Введите WEB_API_KEY (оставьте пустым для сброса):', current);
+            if (input !== null) {
+              api.setApiKey(input);
+              onRefresh();
+            }
+          }}
+          title="Настроить API-ключ"
+          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 hover:bg-slate-700 transition cursor-pointer"
+        >
+          <span>🔑</span>
+          <span className="font-medium">{api.getApiKey() ? 'Ключ задан' : 'API-ключ'}</span>
+        </button>
+
         {/* Health status badge */}
+
         <button
           onClick={onRefresh}
           disabled={isRefreshing}

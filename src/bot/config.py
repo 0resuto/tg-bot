@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     rate_limit_messages_per_minute: int = 30
     rate_limit_llm_calls_per_minute: int = 20
 
+    # -- Web Dashboard -----------------------------------------------------
+    web_api_key: str = ""
+    web_host: str = "127.0.0.1"
+    web_port: int = 8080
+
     # -- Derived helpers ---------------------------------------------------
 
     @property

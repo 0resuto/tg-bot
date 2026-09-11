@@ -19,6 +19,7 @@ from bot.web.controllers.simulator_controller import (
 )
 from bot.web.controllers.stats_controller import handle_get_stats
 from bot.web.dependencies import WebContainer
+from bot.web.middlewares.auth import create_auth_middleware
 
 logger = get_logger(__name__)
 
@@ -47,7 +48,7 @@ def create_web_app(
     config = config or (container.config if container else WebConfig())
     container = container or WebContainer(settings=settings, config=config)
 
-    app = web.Application()
+    app = web.Application(middlewares=[create_auth_middleware()])
     app["container"] = container
 
     async def on_startup(app_instance: web.Application) -> None:

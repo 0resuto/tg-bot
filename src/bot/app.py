@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from typing import cast
 
 from aiogram import Bot
@@ -13,13 +14,14 @@ from aiogram.client.default import DefaultBotProperties
 
 from bot.config import Settings
 from bot.domain.models import ChatMessage
-from bot.infrastructure.database.engine import create_async_engine, create_session_factory
+from bot.infrastructure.database.engine import create_async_engine_instance, create_session_factory
 from bot.infrastructure.llm.openai_provider import OpenAILLMProvider
 from bot.infrastructure.memory.graphiti_backend import GraphitiMemoryBackend
 from bot.infrastructure.redis.client import create_redis_client
 from bot.interfaces.task_runner import AsyncioTaskRunner
 from bot.log import setup_logging
 from bot.repositories import ChatRepository, MemberRepository, TokenUsageRepository
+from bot.services.admin_notifier import AdminNotifier
 from bot.services.context_builder import ContextBuilder
 from bot.services.debouncer import MessageDebouncer
 from bot.services.memory_service import MemoryService
@@ -51,6 +53,14 @@ async def main() -> None:
 
     # 2. Setup logging
     setup_logging()
+
+    # 3. Fail-Fast configuration validation
+    try:
+        settings.validate_for_bot_runtime()
+    except ValueError as err:
+        logger.critical(str(err))
+        sys.exit(1)
+
     logger.info("Starting Telegram Memory Bot...")
 
     # 3. Create infrastructure
@@ -58,7 +68,7 @@ async def main() -> None:
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, run_migrations, settings)
 
-    engine = create_async_engine(settings.postgres_dsn)
+    engine = create_async_engine_instance(settings.postgres_dsn)
     session_factory = create_session_factory(engine)
 
     redis_client = create_redis_client(settings.redis_url)
@@ -101,10 +111,12 @@ async def main() -> None:
     )
 
     context_builder = ContextBuilder(
-        redis=redis_client,
+        redis_client=redis_client,
         window_minutes=settings.context_window_minutes,
         min_messages=settings.context_min_messages,
     )
+
+    admin_notifier = AdminNotifier(admin_chat_id=settings.admin_chat_id)
 
     response_service = ResponseService(
         llm=llm_provider,
@@ -114,6 +126,7 @@ async def main() -> None:
         persona_prompt=settings.get_persona_prompt(),
         response_model=settings.openai_response_model,
         bot_language=settings.bot_language,
+        admin_notifier=admin_notifier,
     )
 
     # Note: MentionDetector needs bot info, which we will fetch in the startup hook.
@@ -144,11 +157,13 @@ async def main() -> None:
         "member_repo": member_repo,
         "token_repo": token_repo,
         "task_runner": task_runner,
+        "admin_notifier": admin_notifier,
         "settings": settings,
     }
 
     # 6. Create bot and dispatcher
     bot = Bot(token=settings.telegram_bot_token, default=DefaultBotProperties(parse_mode="HTML"))
+    admin_notifier.set_bot(bot)
     dp = create_dispatcher(settings, services, redis_client)
 
     # 7. Register startup/shutdown hooks

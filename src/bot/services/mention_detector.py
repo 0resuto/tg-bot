@@ -38,7 +38,7 @@ class MentionDetector:
         variants.add(cyrillic)
         variants.add(latin)
 
-        # Generate Russian noun declension variants for names ending in 'а' or 'я'
+        # Generate Russian noun declension variants for names ending in 'a' or 'ya'
         for variant in list(variants):
             if variant.lower().endswith("а") or variant.lower().endswith("я"):
                 base = variant[:-1]

@@ -76,4 +76,14 @@ async def handle_group_message(
             active_user_names=active_user_names,
         )
         if response:
-            await message.reply(response)
+            sent_msg = await message.reply(response)
+            bot_msg = ChatMessage(
+                chat_id=message.chat.id,
+                user_id=sent_msg.from_user.id if sent_msg.from_user else 0,
+                text=sent_msg.text or response,
+                timestamp=sent_msg.date,
+                message_id=sent_msg.message_id,
+                display_name=sent_msg.from_user.first_name if sent_msg.from_user else "Bot",
+                reply_to_message_id=message.message_id,
+            )
+            await context_builder.add_message(msg=bot_msg)

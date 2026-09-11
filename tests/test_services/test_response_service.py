@@ -110,3 +110,42 @@ async def test_generate_response_with_memory_chat_ids():
     # Group facts were included in system prompt
     assert "Alice likes coffee" in system_prompt
     assert "Alice bought a bike in Rome" in system_prompt
+
+
+async def test_generate_response_error_notifies_admin():
+    from unittest.mock import AsyncMock, MagicMock
+
+    llm = MockLLMProvider()
+    llm.generate_response = AsyncMock(side_effect=RuntimeError("OpenAI API Down"))
+    token_repo = MockTokenUsageRepo()
+
+    mock_notifier = MagicMock()
+    mock_notifier.notify_error = AsyncMock()
+
+    class MockEmptyMem:
+        async def get_quick_facts(self, *args, **kwargs):
+            return []
+
+        async def search_memories(self, *args, **kwargs):
+            return []
+
+    svc = ResponseService(
+        llm=llm,
+        memory_service=MockEmptyMem(),
+        context_builder=MockContextBuilder(),
+        token_repo=token_repo,
+        persona_prompt="You are a bot.",
+        response_model="test-model",
+        bot_language="ru",
+        admin_notifier=mock_notifier,
+    )
+
+    res = await svc.generate_response(
+        chat_id=777, user_display_name="Bob", active_user_names=["Bob"]
+    )
+    assert res == "Извините, произошла ошибка при генерации ответа."
+    assert mock_notifier.notify_error.call_count == 1
+    call_kwargs = mock_notifier.notify_error.call_args.kwargs
+    assert call_kwargs["chat_id"] == 777
+    assert call_kwargs["user_display_name"] == "Bob"
+    assert isinstance(call_kwargs["error"], RuntimeError)

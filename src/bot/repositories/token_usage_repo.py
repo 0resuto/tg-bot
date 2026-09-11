@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.domain.models import TokenUsageRecord
-from bot.infrastructure.database.tables import TokenUsageORM
+from bot.infrastructure.database.tables import ChatORM, TokenUsageORM
 
 
 class TokenUsageRepository:
@@ -17,9 +17,16 @@ class TokenUsageRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self.session_factory = session_factory
 
-    async def record_usage(self, record: TokenUsageRecord) -> None:
+    async def record_usage(self, record: TokenUsageRecord, chat_title: str | None = None) -> None:
         """Record a single token usage event."""
         async with self.session_factory() as session:
+            # Ensure chat exists to satisfy Foreign Key constraint (token_usage_chat_id_fkey)
+            stmt_chat = select(ChatORM).where(ChatORM.chat_id == record.chat_id)
+            chat_res = await session.execute(stmt_chat)
+            if not chat_res.scalar_one_or_none():
+                session.add(ChatORM(chat_id=record.chat_id, title=chat_title))
+                await session.flush()
+
             orm_record = TokenUsageORM(
                 chat_id=record.chat_id,
                 telegram_user_id=record.telegram_user_id,

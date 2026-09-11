@@ -79,9 +79,9 @@ async def cmd_memory_stats(
             f"- Tracked Members: {mem_stats.get('tracked_members', 0)}\n"
             f"- Last Ingestion: {mem_stats.get('last_ingestion', 'Never')}\n\n"
             "Token Usage (30 days):\n"
-            f"- Today: {token_stats.get('today', 0)}\n"
-            f"- This Week: {token_stats.get('this_week', 0)}\n"
-            f"- This Month: {token_stats.get('this_month', 0)}"
+            f"- Today: {token_stats.get('today_tokens', 0)}\n"
+            f"- This Week: {token_stats.get('week_tokens', 0)}\n"
+            f"- This Month: {token_stats.get('month_tokens', 0)}"
         )
         await message.reply(reply_text)
     except Exception as e:

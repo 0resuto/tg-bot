@@ -61,17 +61,6 @@ class MemoryFact:
 
 
 @dataclass(frozen=True, slots=True)
-class UserSummary:
-    """Cached summary of what the bot knows about a chat member."""
-
-    user_id: int
-    display_name: str
-    summary_text: str
-    fact_count: int = 0
-    last_updated: datetime | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class TokenUsageRecord:
     """Token consumption for a single LLM call."""
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 
 import redis.asyncio as redis
 
@@ -56,15 +57,13 @@ class MessageDebouncer:
             if key in self._timers:
                 self._timers[key].cancel()
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             self._timers[key] = loop.call_later(
                 self.debounce_seconds, lambda: asyncio.create_task(self._flush(chat_id, user_id))
             )
 
     async def _flush(self, chat_id: int, user_id: int) -> None:
         """Pop all messages from Redis list, deserialize, and call on_flush."""
-        from datetime import datetime
-
         async with self._get_lock(chat_id, user_id):
             redis_key = f"debounce:{chat_id}:{user_id}"
 

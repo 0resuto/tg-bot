@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from typing import TYPE_CHECKING
+
 from bot.domain.models import ChatMessage, MemoryFact
 from bot.interfaces.llm import LLMProvider
 from bot.log import get_logger
 from bot.repositories.token_usage_repo import TokenUsageRepository
 from bot.services.context_builder import ContextBuilder
 from bot.services.memory_service import MemoryService
+
+if TYPE_CHECKING:
+    from bot.services.admin_notifier import AdminNotifier
 
 logger = get_logger(__name__)
 
@@ -22,6 +28,7 @@ class ResponseService:
         persona_prompt: str,
         response_model: str,
         bot_language: str = "ru",
+        admin_notifier: AdminNotifier | None = None,
     ) -> None:
         self.llm = llm
         self.memory_service = memory_service
@@ -30,6 +37,7 @@ class ResponseService:
         self.persona_prompt = persona_prompt
         self.response_model = response_model
         self.bot_language = bot_language
+        self.admin_notifier = admin_notifier
 
     async def generate_response(
         self,
@@ -91,12 +99,25 @@ class ResponseService:
                 max_tokens=800,
             )
 
-            # 7. Record token usage
-            await self.token_repo.record_usage(token_usage)
+            # 7. Record token usage (telemetry failure should not drop response)
+            try:
+                token_usage = replace(token_usage, chat_id=chat_id)
+                await self.token_repo.record_usage(token_usage)
+            except Exception as usage_err:
+                logger.error("Failed to record token usage", exc_info=usage_err, chat_id=chat_id)
 
             return response_text
         except Exception as e:
             logger.error("Error generating LLM response", exc_info=e, chat_id=chat_id)
+            if self.admin_notifier:
+                try:
+                    await self.admin_notifier.notify_error(
+                        chat_id=chat_id,
+                        user_display_name=user_display_name,
+                        error=e,
+                    )
+                except Exception as notify_err:
+                    logger.error("Failed to notify admin about LLM response error: %s", notify_err)
             if raise_on_error:
                 raise
             return "Извините, произошла ошибка при генерации ответа."

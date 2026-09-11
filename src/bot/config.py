@@ -122,3 +122,28 @@ class Settings(BaseSettings):
             if path.is_file():
                 return path.read_text(encoding="utf-8")
         return self.bot_persona_system_prompt
+
+    def validate_for_bot_runtime(self) -> None:
+        """Validate required secrets before starting the Telegram polling bot."""
+        missing: list[str] = []
+        token = self.telegram_bot_token.strip()
+        if not token or token.startswith("YOUR_"):
+            missing.append("TELEGRAM_BOT_TOKEN")
+        if not self.openai_api_key or self.openai_api_key.strip().startswith("sk-..."):
+            missing.append("OPENAI_API_KEY")
+        if not self.postgres_password:
+            missing.append("POSTGRES_PASSWORD")
+        if not self.neo4j_password:
+            missing.append("NEO4J_PASSWORD")
+
+        if missing:
+            msg = (
+                "\n=================================================================\n"
+                "[FATAL CONFIGURATION ERROR] Telegram Bot cannot start!\n"
+                "Missing or unconfigured required environment variables:\n"
+                + "".join(f"  - {var}\n" for var in missing)
+                + "\nTo run the Telegram Bot, configure these in your .env file.\n"
+                "For local development without Telegram, run dev.bat (Simulator mode).\n"
+                "=================================================================\n"
+            )
+            raise ValueError(msg)

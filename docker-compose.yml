@@ -27,7 +27,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-botuser} -d ${POSTGRES_DB:-bot}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tgbot} -d ${POSTGRES_DB:-tgbot}"]
       interval: 5s
       timeout: 5s
       retries: 5

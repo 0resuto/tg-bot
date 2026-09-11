@@ -127,15 +127,42 @@ docker exec -t <neo4j-container> neo4j-admin database dump system --to-path=/dat
 - Without "Group Privacy" turned off, the bot will only see messages explicitly starting with a `/` command or replies directly to its messages.
 - For full memory functionality, the bot must see all messages. Turn off Group Privacy via BotFather, or promote the bot to Administrator in the chat.
 
-## 13. Interactive Web Testing Simulator
+## 13. Production Control Panel & Chat Simulator
 
-A minimalist React 18 panel is included for manual testing without needing a Telegram group:
+The bot includes an enterprise-grade web management suite built with an OOP `aiohttp` backend (`src/bot/web/`) and a modular React 18 + TypeScript + Tailwind CSS Single Page Application (`frontend/`).
+
+### Production Dashboard (Default)
+In production, the dashboard provides live monitoring and inspection of production chats and infrastructure without any virtual simulator interference:
 ```bash
-uv run python scripts/simulator_server.py
+python scripts/dashboard_server.py
+# or via CLI module:
+python -m bot.web --port 8080
 ```
-Open **http://127.0.0.1:8080** in your browser to:
-- Simulate multiple group members chatting (Alice, Bob, Charlie, Admin).
-- Test bot mentions, transliterated names, and word boundaries.
-- Inspect the Knowledge Graph facts in real time.
-- Verify sensitive topic filtering and redaction.
-- Test `/forget_fact` and `/memory_stats` admin commands.
+Key features:
+- **System Health & Diagnostics**: Instant live verification of OpenAI LLM, PostgreSQL, Redis, and Neo4j connectivity.
+- **Interactive Knowledge Graph**: Vis.js physics-driven graph visualizing semantic entities, members, and temporal episodic edges.
+- **Memory Browser**: Filter and search extracted facts per chat, with one-click admin forget (`/forget_fact`).
+- **Context Inspector**: Real-time inspection of short-term sliding window messages in Redis.
+- **Admin & Token Analytics**: Overview of prompt/completion tokens, total OpenAI spend, and bot configuration.
+- **Live System Logs**: Searchable and filterable in-memory event stream.
+
+### Isolated Sandbox & Chat Simulator
+When sandbox testing is needed, enable simulator mode to safely test prompts, mention detection, and debouncing without a live Telegram bot:
+```bash
+python scripts/simulator_server.py
+# or via CLI flag:
+python -m bot.web --simulator --port 8080
+```
+- Activates a dedicated **🎮 Dev Test Group (Sandbox)** chat.
+- Provides virtual group members (Alice, Bob, Charlie, Admin) with customizable presets.
+- Emulates the full inbound message processing pipeline (filters, debouncing, LLM response, memory extraction).
+- In production dashboard mode, all simulator endpoints are automatically disabled (returning 403 Forbidden).
+
+### Frontend Build
+The web frontend is located in `frontend/`:
+```bash
+cd frontend
+npm install
+npm run build
+```
+The compiled bundle in `frontend/dist/` is served directly by the Python web server.

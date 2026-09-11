@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.infrastructure.database.tables import ChatORM
@@ -29,17 +32,20 @@ class ChatRepository:
             return result.scalar_one_or_none()
 
     async def upsert_chat(self, chat_id: int, title: str | None = None) -> None:
-        """Upsert a chat, updating its title if provided."""
+        """Upsert a chat atomically, updating its title if provided."""
         async with self.session_factory() as session:
-            stmt = select(ChatORM).where(ChatORM.chat_id == chat_id)
-            result = await session.execute(stmt)
-            chat = result.scalar_one_or_none()
+            values: dict[str, Any] = {"chat_id": chat_id, "title": title}
+            update_set: dict[str, Any] = {"is_active": True}
+            if title is not None:
+                update_set["title"] = title
 
-            if chat:
-                if title is not None and chat.title != title:
-                    chat.title = title
-            else:
-                chat = ChatORM(chat_id=chat_id, title=title)
-                session.add(chat)
-
+            stmt = (
+                insert(ChatORM)
+                .values(**values)
+                .on_conflict_do_update(
+                    index_elements=[ChatORM.chat_id],
+                    set_=update_set,
+                )
+            )
+            await session.execute(stmt)
             await session.commit()

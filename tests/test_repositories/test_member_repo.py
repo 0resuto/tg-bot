@@ -24,3 +24,17 @@ async def test_upsert_member_update(db_session):
 
     m = await repo.get_member(1, 10)
     assert m.username == "alice_new"
+
+
+async def test_concurrent_upsert_member(db_session):
+    import asyncio
+
+    repo = MemberRepository(db_session)
+    member = MemberIdentity(50, "bob", "Bob", None)
+    # Run concurrent upserts on the same new member and chat
+    await asyncio.gather(
+        *(repo.upsert_member(888, member, chat_title=f"Group {i}") for i in range(10))
+    )
+    m = await repo.get_member(888, 50)
+    assert m is not None
+    assert m.username == "bob"

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.domain.models import TokenUsageRecord
@@ -20,12 +21,16 @@ class TokenUsageRepository:
     async def record_usage(self, record: TokenUsageRecord, chat_title: str | None = None) -> None:
         """Record a single token usage event."""
         async with self.session_factory() as session:
-            # Ensure chat exists to satisfy Foreign Key constraint (token_usage_chat_id_fkey)
-            stmt_chat = select(ChatORM).where(ChatORM.chat_id == record.chat_id)
-            chat_res = await session.execute(stmt_chat)
-            if not chat_res.scalar_one_or_none():
-                session.add(ChatORM(chat_id=record.chat_id, title=chat_title))
-                await session.flush()
+            # Ensure chat exists atomically to satisfy Foreign Key constraint
+            chat_stmt = (
+                insert(ChatORM)
+                .values(chat_id=record.chat_id, title=chat_title)
+                .on_conflict_do_update(
+                    index_elements=[ChatORM.chat_id],
+                    set_={"title": chat_title} if chat_title is not None else {"is_active": True},
+                )
+            )
+            await session.execute(chat_stmt)
 
             orm_record = TokenUsageORM(
                 chat_id=record.chat_id,

@@ -37,28 +37,43 @@ class ResponseService:
         user_display_name: str,
         active_user_names: list[str],
         *,
+        memory_chat_ids: list[int] | None = None,
         raise_on_error: bool = False,
     ) -> str:
         """Generate a response using conversational context and memory."""
+        effective_memory_chat_ids = memory_chat_ids if memory_chat_ids else [chat_id]
 
         # 1. Get conversation context
         context = await self.context_builder.get_context(chat_id)
 
-        # 2. Get Level 1 quick facts for all active users
+        # 2. Get Level 1 quick facts for all active users across effective memory chats
         quick_facts: dict[str, list[MemoryFact]] = {}
         for name in active_user_names:
-            facts = await self.memory_service.get_quick_facts(user_name=name, chat_id=chat_id)
-            if facts:
-                quick_facts[name] = facts
+            all_name_facts: list[MemoryFact] = []
+            seen_texts: set[str] = set()
+            for m_chat_id in effective_memory_chat_ids:
+                facts = await self.memory_service.get_quick_facts(user_name=name, chat_id=m_chat_id)
+                for f in facts:
+                    if f.fact_text not in seen_texts:
+                        seen_texts.add(f.fact_text)
+                        all_name_facts.append(f)
+            if all_name_facts:
+                quick_facts[name] = all_name_facts
 
-        # 3. Get Level 2 deep search using recent conversation as query
+        # 3. Get Level 2 deep search using recent conversation as query across effective memory chats
         query_lines = [f"{msg.display_name}: {msg.text}" for msg in context[-5:]] if context else []
         query_text = "\n".join(query_lines)
         deep_facts: list[MemoryFact] = []
         if query_text:
-            deep_facts = await self.memory_service.search_memories(
-                query=query_text, chat_id=chat_id
-            )
+            seen_deep_texts: set[str] = set()
+            for m_chat_id in effective_memory_chat_ids:
+                facts = await self.memory_service.search_memories(
+                    query=query_text, chat_id=m_chat_id
+                )
+                for f in facts:
+                    if f.fact_text not in seen_deep_texts:
+                        seen_deep_texts.add(f.fact_text)
+                        deep_facts.append(f)
 
         # 4. Build system prompt
         system_prompt = self._build_system_prompt(quick_facts, deep_facts)

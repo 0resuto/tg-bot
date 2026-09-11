@@ -172,6 +172,8 @@ async def main() -> None:
         allowed = set(active_chats)
         if settings.admin_chat_id:
             allowed.add(settings.admin_chat_id)
+        if settings.admin_user_id:
+            allowed.add(settings.admin_user_id)
         if "allowlist" in dp:
             dp["allowlist"].update_allowed_chats(allowed)
         logger.info("Startup complete, allowed chats: %s", allowed)

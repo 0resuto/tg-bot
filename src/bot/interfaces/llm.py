@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from bot.domain.models import TokenUsageRecord
-
 
 class LLMProvider(Protocol):
     """Abstract LLM chat-completion provider."""
@@ -23,7 +21,7 @@ class LLMProvider(Protocol):
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 1024,
-    ) -> tuple[str, TokenUsageRecord]:
+    ) -> str:
         """Generate a chat completion.
 
         Args:
@@ -35,6 +33,6 @@ class LLMProvider(Protocol):
             max_tokens: Maximum tokens in the response.
 
         Returns:
-            A ``(response_text, usage_record)`` tuple.
+            The generated response text.
         """
         ...

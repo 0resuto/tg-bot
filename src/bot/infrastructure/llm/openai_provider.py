@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
 import openai
@@ -14,8 +13,6 @@ from tenacity import (
     wait_exponential,
 )
 
-from bot.domain.enums import OperationType
-from bot.domain.models import TokenUsageRecord
 from bot.interfaces import LLMProvider
 
 logger = structlog.get_logger()
@@ -28,12 +25,10 @@ class OpenAILLMProvider(LLMProvider):
         self,
         api_key: str,
         default_model: str,
-        default_chat_id: int = 0,
         timeout: float = 60.0,
     ):
         self.client = openai.AsyncOpenAI(api_key=api_key, timeout=timeout)
         self.default_model = default_model
-        self.default_chat_id = default_chat_id
         self.timeout = timeout
 
     @retry(
@@ -57,7 +52,7 @@ class OpenAILLMProvider(LLMProvider):
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 1000,
-    ) -> tuple[str, TokenUsageRecord]:
+    ) -> str:
         """Generate response using OpenAI API."""
         target_model = model or self.default_model
 
@@ -96,30 +91,4 @@ class OpenAILLMProvider(LLMProvider):
             else:
                 raise
 
-        content = response.choices[0].message.content or ""
-        usage = response.usage
-
-        prompt_tokens = usage.prompt_tokens if usage else 0
-        completion_tokens = usage.completion_tokens if usage else 0
-        total_tokens = usage.total_tokens if usage else 0
-
-        record = TokenUsageRecord(
-            chat_id=self.default_chat_id,
-            model=target_model,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=total_tokens,
-            operation=OperationType.RESPONSE,
-            telegram_user_id=None,
-            timestamp=datetime.now(UTC),
-        )
-
-        logger.info(
-            "openai_usage",
-            model=target_model,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=total_tokens,
-        )
-
-        return content, record
+        return response.choices[0].message.content or ""

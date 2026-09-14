@@ -9,7 +9,6 @@ from neo4j import GraphDatabase
 
 from bot.config import Settings
 from bot.log import get_logger
-from bot.repositories import TokenUsageRepository
 from bot.services.memory_service import MemoryService
 from bot.web.services.graph_service import _serialize_neo4j_val
 
@@ -23,11 +22,9 @@ class MemoryQueryService:
         self,
         settings: Settings,
         memory_service: MemoryService | None,
-        token_repo: TokenUsageRepository | None,
     ) -> None:
         self.settings = settings
         self.memory_service = memory_service
-        self.token_repo = token_repo
 
     def _fetch_raw_facts(self, chat_id: int | None = None) -> list[dict[str, Any]]:
         """Query Neo4j directly for extracted facts."""
@@ -112,14 +109,6 @@ class MemoryQueryService:
             except Exception as exc:
                 mem_stats = {"status": "error", "error": str(exc)}
 
-        token_stats: dict[str, Any] = {"today_tokens": 0, "month_tokens": 0}
-        if self.token_repo and chat_id is not None:
-            try:
-                token_stats = await self.token_repo.get_usage_stats(chat_id, days=30)
-            except Exception as exc:
-                token_stats = {"error": str(exc)}
-
         return {
             "memory_stats": mem_stats,
-            "token_stats": token_stats,
         }

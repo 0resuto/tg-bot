@@ -4,8 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from bot.domain.enums import OperationType
-from bot.domain.models import MemoryFact, MemoryStats, TokenUsageRecord
+from bot.domain.models import MemoryFact, MemoryStats
 
 
 class MockLLMProvider:
@@ -17,17 +16,7 @@ class MockLLMProvider:
         self, system_prompt, messages, *, model=None, temperature=0.7, max_tokens=1024
     ):
         self.calls.append({"system_prompt": system_prompt, "messages": messages, "model": model})
-        usage = TokenUsageRecord(
-            chat_id=0,
-            model=model or "test-model",
-            prompt_tokens=10,
-            completion_tokens=5,
-            total_tokens=15,
-            operation=OperationType.RESPONSE,
-            telegram_user_id=None,
-            timestamp=datetime.now(),
-        )
-        return self.response_text, usage
+        return self.response_text
 
 
 class MockMemoryBackend:
@@ -60,17 +49,6 @@ class MockMemoryBackend:
             total_episodes=3,
             last_ingestion_at=datetime(2026, 9, 1, 12, 0, tzinfo=UTC),
         )
-
-
-class MockTokenUsageRepo:
-    def __init__(self):
-        self.records = []
-
-    async def record_usage(self, record):
-        self.records.append(record)
-
-    async def get_usage_stats(self, chat_id, days=30):
-        return {"today_tokens": 100, "week_tokens": 500, "month_tokens": 2000}
 
 
 @pytest.fixture

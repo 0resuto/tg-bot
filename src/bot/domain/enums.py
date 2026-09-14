@@ -5,14 +5,6 @@ from __future__ import annotations
 from enum import StrEnum
 
 
-class OperationType(StrEnum):
-    """Type of LLM operation for token-usage tracking."""
-
-    EXTRACTION = "extraction"
-    RESPONSE = "response"
-    MEMORY_SEARCH = "memory_search"
-
-
 class MemoryLevel(StrEnum):
     """Memory retrieval depth."""
 

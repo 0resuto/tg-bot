@@ -6,14 +6,8 @@ other framework.  They serve as the lingua franca between layers.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
-
-from bot.domain.enums import OperationType
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
+from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,20 +52,6 @@ class MemoryFact:
     subject_name: str | None = None
     confidence: float = 1.0
     created_at: datetime | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class TokenUsageRecord:
-    """Token consumption for a single LLM call."""
-
-    chat_id: int
-    model: str
-    prompt_tokens: int
-    completion_tokens: int
-    total_tokens: int
-    operation: OperationType
-    telegram_user_id: int | None = None
-    timestamp: datetime = field(default_factory=_utcnow)
 
 
 @dataclass(frozen=True, slots=True)

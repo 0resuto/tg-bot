@@ -59,7 +59,6 @@ async def cmd_forget_fact(
 async def cmd_memory_stats(
     message: Message,
     memory_service: Any,
-    token_repo: Any,
     chat_repo: Any,
     member_repo: Any,
 ) -> None:
@@ -72,7 +71,6 @@ async def cmd_memory_stats(
 
     try:
         mem_stats = await memory_service.get_stats(chat_id=target_chat_id)
-        token_stats = await token_repo.get_usage_stats(chat_id=target_chat_id, days=30)
         members = await member_repo.get_members_by_chat(target_chat_id)
         tracked_count = len(members)
 
@@ -86,11 +84,7 @@ async def cmd_memory_stats(
             "Memory Stats:\n"
             f"- Entities / Relations / Episodes: {mem_stats.total_entities} / {mem_stats.total_relations} / {mem_stats.total_episodes}\n"
             f"- Tracked Members: {tracked_count}\n"
-            f"- Last Ingestion: {last_ingestion_str}\n\n"
-            "Token Usage (30 days):\n"
-            f"- Today: {token_stats.get('today_tokens', 0)}\n"
-            f"- This Week: {token_stats.get('week_tokens', 0)}\n"
-            f"- This Month: {token_stats.get('month_tokens', 0)}"
+            f"- Last Ingestion: {last_ingestion_str}"
         )
         await message.reply(reply_text)
     except Exception as e:
@@ -163,10 +157,12 @@ async def handle_admin_private_message(
             logger.debug("Failed to retrieve group members for private context", error=str(e))
 
     # 4. Generate response with shared memory access
+    bot_id = message.bot.id if message.bot else 0
     response = await response_service.generate_response(
         chat_id=message.chat.id,
         user_display_name=identity.display_name,
         active_user_names=active_user_names,
+        bot_id=bot_id,
         memory_chat_ids=memory_chat_ids,
     )
 

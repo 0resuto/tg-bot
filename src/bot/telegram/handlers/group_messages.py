@@ -72,11 +72,12 @@ async def handle_group_message(
     if is_mentioned:
         recent_context = await context_builder.get_context(chat_id=message.chat.id)
         active_user_names = list({msg.display_name for msg in recent_context if msg.display_name})
-
+        bot_id = message.bot.id if message.bot else 0
         response = await response_service.generate_response(
             chat_id=message.chat.id,
             user_display_name=identity.display_name,
             active_user_names=active_user_names,
+            bot_id=bot_id,
         )
         if response:
             sent_msg = await message.reply(response)

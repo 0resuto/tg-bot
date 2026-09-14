@@ -8,7 +8,6 @@ import redis.asyncio as redis
 from bot.domain.models import ChatMessage, MemoryFact, MemoryStats
 from bot.interfaces.memory import MemoryBackend
 from bot.log import get_logger
-from bot.repositories.token_usage_repo import TokenUsageRepository
 from bot.services.sensitive_filter import SensitiveFilter
 
 logger = get_logger(__name__)
@@ -21,7 +20,6 @@ class MemoryService:
         self,
         memory: MemoryBackend,
         sensitive_filter: SensitiveFilter,
-        token_repo: TokenUsageRepository,
         redis_client: redis.Redis | None = None,
         redis: redis.Redis | None = None,
         cache_ttl: int = 300,
@@ -30,7 +28,6 @@ class MemoryService:
     ) -> None:
         self.memory = memory
         self.sensitive_filter = sensitive_filter
-        self.token_repo = token_repo
         client = redis_client or redis
         if client is None:
             raise ValueError("Either redis_client or redis must be provided")

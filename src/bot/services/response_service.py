@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import replace
+import re
 from typing import TYPE_CHECKING
 
 from bot.domain.models import ChatMessage, MemoryFact
 from bot.interfaces.llm import LLMProvider
 from bot.log import get_logger
-from bot.repositories.token_usage_repo import TokenUsageRepository
 from bot.services.context_builder import ContextBuilder
 from bot.services.memory_service import MemoryService
 
@@ -24,7 +23,6 @@ class ResponseService:
         llm: LLMProvider,
         memory_service: MemoryService,
         context_builder: ContextBuilder,
-        token_repo: TokenUsageRepository,
         persona_prompt: str,
         response_model: str,
         bot_language: str = "ru",
@@ -33,7 +31,6 @@ class ResponseService:
         self.llm = llm
         self.memory_service = memory_service
         self.context_builder = context_builder
-        self.token_repo = token_repo
         self.persona_prompt = persona_prompt
         self.response_model = response_model
         self.bot_language = bot_language
@@ -45,6 +42,7 @@ class ResponseService:
         user_display_name: str,
         active_user_names: list[str],
         *,
+        bot_id: int = 0,
         memory_chat_ids: list[int] | None = None,
         raise_on_error: bool = False,
     ) -> str:
@@ -86,27 +84,18 @@ class ResponseService:
         # 4. Build system prompt
         system_prompt = self._build_system_prompt(quick_facts, deep_facts)
 
-        # 5. Build messages list
-        messages = self._build_messages(context)
+        # 5. Build messages list with proper roles and sanitized names
+        messages = self._build_messages(context, bot_id=bot_id)
 
         # 6. Call LLM provider
         try:
-            response_text, token_usage = await self.llm.generate_response(
+            return await self.llm.generate_response(
                 system_prompt=system_prompt,
                 messages=messages,
                 model=self.response_model,
                 temperature=0.7,
                 max_tokens=800,
             )
-
-            # 7. Record token usage (telemetry failure should not drop response)
-            try:
-                token_usage = replace(token_usage, chat_id=chat_id)
-                await self.token_repo.record_usage(token_usage)
-            except Exception as usage_err:
-                logger.error("Failed to record token usage", exc_info=usage_err, chat_id=chat_id)
-
-            return response_text
         except Exception as e:
             logger.error("Error generating LLM response", exc_info=e, chat_id=chat_id)
             if self.admin_notifier:
@@ -143,6 +132,26 @@ class ResponseService:
 
         return "\n".join(prompt_parts)
 
-    def _build_messages(self, context: list[ChatMessage]) -> list[dict[str, str]]:
-        """Converts ChatMessage list to OpenAI-style message dicts."""
-        return [{"role": "user", "content": f"{msg.display_name}: {msg.text}"} for msg in context]
+    @staticmethod
+    def _sanitize_name(name: str) -> str:
+        """Sanitizes user display names to prevent prompt injection and formatting breaks."""
+        if not name:
+            return "User"
+        cleaned = re.sub(r"[\r\n\t]", " ", name)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()[:64]
+        return cleaned or "User"
+
+    def _build_messages(self, context: list[ChatMessage], bot_id: int = 0) -> list[dict[str, str]]:
+        """Converts ChatMessage list to OpenAI-style message dicts.
+
+        Messages from the bot are assigned role 'assistant' without name prefix.
+        User messages are assigned role 'user' with sanitized display names.
+        """
+        messages: list[dict[str, str]] = []
+        for msg in context:
+            if bot_id and msg.user_id == bot_id:
+                messages.append({"role": "assistant", "content": msg.text})
+            else:
+                safe_name = self._sanitize_name(msg.display_name)
+                messages.append({"role": "user", "content": f"{safe_name}: {msg.text}"})
+        return messages

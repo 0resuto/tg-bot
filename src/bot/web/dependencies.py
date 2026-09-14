@@ -11,7 +11,7 @@ from bot.infrastructure.database.engine import create_async_engine_instance, cre
 from bot.infrastructure.llm.openai_provider import OpenAILLMProvider
 from bot.infrastructure.memory.graphiti_backend import GraphitiMemoryBackend
 from bot.log import get_logger
-from bot.repositories import ChatRepository, MemberRepository, TokenUsageRepository
+from bot.repositories import ChatRepository, MemberRepository
 from bot.services.admin_notifier import AdminNotifier
 from bot.services.context_builder import ContextBuilder
 from bot.services.debouncer import MessageDebouncer
@@ -44,7 +44,6 @@ class WebContainer:
         # Repositories
         self.chat_repo: ChatRepository | None = None
         self.member_repo: MemberRepository | None = None
-        self.token_repo: TokenUsageRepository | None = None
 
         # Core bot services
         self.memory_backend: GraphitiMemoryBackend | None = None
@@ -79,7 +78,6 @@ class WebContainer:
                 self.session_factory = create_session_factory(self.engine)
                 self.chat_repo = ChatRepository(self.session_factory)
                 self.member_repo = MemberRepository(self.session_factory)
-                self.token_repo = TokenUsageRepository(self.session_factory)
             except Exception as exc:
                 logger.error("Failed to initialize PostgreSQL in WebContainer", error=str(exc))
 
@@ -133,11 +131,10 @@ class WebContainer:
             enabled=self.settings.sensitive_filter_enabled,
             categories=self.settings.sensitive_category_list,
         )
-        if self.memory_backend and self.redis and self.token_repo:
+        if self.memory_backend and self.redis:
             self.memory_service = MemoryService(
                 memory=self.memory_backend,
                 sensitive_filter=self.sensitive_filter,
-                token_repo=self.token_repo,
                 redis_client=self.redis,
                 cache_ttl=self.settings.memory_user_summary_cache_ttl,
                 search_limit_quick=self.settings.memory_search_limit_quick,
@@ -147,7 +144,6 @@ class WebContainer:
         self.memory_query_service = MemoryQueryService(
             settings=self.settings,
             memory_service=self.memory_service,
-            token_repo=self.token_repo,
         )
 
         # Response Service
@@ -175,12 +171,11 @@ class WebContainer:
             bot=self.bot,
         )
 
-        if self.llm_provider and self.memory_service and self.context_builder and self.token_repo:
+        if self.llm_provider and self.memory_service and self.context_builder:
             self.response_service = ResponseService(
                 llm=self.llm_provider,
                 memory_service=self.memory_service,
                 context_builder=self.context_builder,
-                token_repo=self.token_repo,
                 persona_prompt=self.settings.get_persona_prompt(),
                 response_model=self.settings.openai_response_model,
                 bot_language=self.settings.bot_language,

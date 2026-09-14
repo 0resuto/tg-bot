@@ -7,7 +7,7 @@ import pytest
 from bot.domain.models import ChatMessage
 from bot.services.memory_service import MemoryService
 from bot.services.sensitive_filter import SensitiveFilter
-from tests.conftest import MockMemoryBackend, MockTokenUsageRepo
+from tests.conftest import MockMemoryBackend
 
 
 @pytest.fixture
@@ -27,11 +27,9 @@ def sensitive_filter():
 @pytest.fixture
 def memory_service(fake_redis, sensitive_filter):
     backend = MockMemoryBackend()
-    token_repo = MockTokenUsageRepo()
     return MemoryService(
         memory=backend,
         sensitive_filter=sensitive_filter,
-        token_repo=token_repo,
         redis=fake_redis,
         cache_ttl=60,
         search_limit_quick=5,

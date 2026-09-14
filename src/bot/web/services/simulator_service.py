@@ -174,6 +174,7 @@ class ChatSimulatorService:
                         chat_id=self.chat_id,
                         user_display_name=user_name,
                         active_user_names=active_user_names,
+                        bot_id=self.bot_user_id,
                     )
                     if bot_reply and self.context_builder:
                         bot_msg = ChatMessage(

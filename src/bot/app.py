@@ -20,7 +20,7 @@ from bot.infrastructure.memory.graphiti_backend import GraphitiMemoryBackend
 from bot.infrastructure.redis.client import create_redis_client
 from bot.interfaces.task_runner import AsyncioTaskRunner
 from bot.log import setup_logging
-from bot.repositories import ChatRepository, MemberRepository, TokenUsageRepository
+from bot.repositories import ChatRepository, MemberRepository
 from bot.services.admin_notifier import AdminNotifier
 from bot.services.context_builder import ContextBuilder
 from bot.services.debouncer import MessageDebouncer
@@ -93,7 +93,6 @@ async def main() -> None:
     # 4. Create repositories
     chat_repo = ChatRepository(session_factory)
     member_repo = MemberRepository(session_factory)
-    token_repo = TokenUsageRepository(session_factory)
 
     # 5. Create services
     sensitive_filter = SensitiveFilter(
@@ -103,7 +102,6 @@ async def main() -> None:
     memory_service = MemoryService(
         memory=graphiti_backend,
         sensitive_filter=sensitive_filter,
-        token_repo=token_repo,
         redis_client=redis_client,
         cache_ttl=settings.memory_user_summary_cache_ttl,
         search_limit_quick=settings.memory_search_limit_quick,
@@ -123,7 +121,6 @@ async def main() -> None:
         llm=llm_provider,
         memory_service=memory_service,
         context_builder=context_builder,
-        token_repo=token_repo,
         persona_prompt=settings.get_persona_prompt(),
         response_model=settings.openai_response_model,
         bot_language=settings.bot_language,
@@ -153,7 +150,6 @@ async def main() -> None:
         "debouncer": debouncer,
         "chat_repo": chat_repo,
         "member_repo": member_repo,
-        "token_repo": token_repo,
         "task_runner": task_runner,
         "admin_notifier": admin_notifier,
         "settings": settings,

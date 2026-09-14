@@ -63,13 +63,20 @@ async def test_handle_admin_private_message():
 
     class MockResponseService:
         async def generate_response(
-            self, chat_id, user_display_name, active_user_names, *, memory_chat_ids=None
+            self,
+            chat_id,
+            user_display_name,
+            active_user_names,
+            *,
+            bot_id=0,
+            memory_chat_ids=None,
         ):
             generate_calls.append(
                 {
                     "chat_id": chat_id,
                     "user_display_name": user_display_name,
                     "active_user_names": active_user_names,
+                    "bot_id": bot_id,
                     "memory_chat_ids": memory_chat_ids,
                 }
             )
@@ -125,10 +132,6 @@ async def test_cmd_memory_stats():
                 last_ingestion_at=datetime(2026, 9, 1, 12, 0, tzinfo=UTC),
             )
 
-    class MockTokenRepo:
-        async def get_usage_stats(self, chat_id: int, days: int = 30):
-            return {"today_tokens": 120, "week_tokens": 600, "month_tokens": 2500}
-
     class MockChatRepo:
         async def get_active_chat_ids(self):
             return [-100123456]
@@ -143,7 +146,6 @@ async def test_cmd_memory_stats():
     await cmd_memory_stats(
         message=message,
         memory_service=MockMemoryService(),
-        token_repo=MockTokenRepo(),
         chat_repo=MockChatRepo(),
         member_repo=MockMemberRepo(),
     )
@@ -153,7 +155,6 @@ async def test_cmd_memory_stats():
     assert "Entities / Relations / Episodes: 5 / 10 / 3" in reply_text
     assert "Tracked Members: 2" in reply_text
     assert "Last Ingestion: 2026-09-01 12:00 UTC" in reply_text
-    assert "Today: 120" in reply_text
 
 
 @pytest.mark.asyncio

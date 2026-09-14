@@ -85,10 +85,6 @@ class Settings(BaseSettings):
     sensitive_filter_enabled: bool = True
     sensitive_categories: str = "health,finance,credentials,legal,sexual,political"
 
-    # -- Rate Limiting -----------------------------------------------------
-    rate_limit_messages_per_minute: int = 30
-    rate_limit_llm_calls_per_minute: int = 20
-
     # -- Web Dashboard -----------------------------------------------------
     web_api_key: str = ""
     web_host: str = "127.0.0.1"

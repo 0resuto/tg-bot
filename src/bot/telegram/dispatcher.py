@@ -13,7 +13,6 @@ from aiogram.fsm.storage.redis import RedisStorage
 from bot.config import Settings  # type: ignore
 from bot.telegram.handlers import setup_routers
 from bot.telegram.middlewares.allowlist import ChatAllowlistMiddleware
-from bot.telegram.middlewares.rate_limit import RateLimitMiddleware
 from bot.telegram.middlewares.services import ServicesMiddleware
 
 
@@ -31,11 +30,6 @@ def create_dispatcher(
 
     # Expose allowlist to handlers so they can dynamically add/remove chats
     services["allowlist"] = allowlist
-
-    rate_limiter = RateLimitMiddleware(
-        redis=redis_client, max_per_minute=settings.rate_limit_messages_per_minute
-    )
-    dp.message.outer_middleware(rate_limiter)
 
     # Inject services into message, callback_query and my_chat_member handlers
     services_mw = ServicesMiddleware(services=services)

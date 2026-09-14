@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from neo4j import GraphDatabase
+from neo4j import Driver, GraphDatabase
 
 from bot.config import Settings
 from bot.log import get_logger
@@ -22,19 +22,25 @@ class MemoryQueryService:
         self,
         settings: Settings,
         memory_service: MemoryService | None,
+        driver: Driver | None = None,
     ) -> None:
         self.settings = settings
         self.memory_service = memory_service
+        self.driver = driver
 
     def _fetch_raw_facts(self, chat_id: int | None = None) -> list[dict[str, Any]]:
         """Query Neo4j directly for extracted facts."""
         if not self.settings.neo4j_password:
             return []
 
-        driver = GraphDatabase.driver(
-            self.settings.neo4j_uri,
-            auth=(self.settings.neo4j_user, self.settings.neo4j_password),
-        )
+        driver = self.driver
+        created_driver = False
+        if driver is None:
+            driver = GraphDatabase.driver(
+                self.settings.neo4j_uri,
+                auth=(self.settings.neo4j_user, self.settings.neo4j_password),
+            )
+            created_driver = True
         extracted: list[dict[str, Any]] = []
         try:
             with driver.session() as session:
@@ -68,7 +74,8 @@ class MemoryQueryService:
         except Exception as exc:
             logger.warning("Failed to fetch raw facts from Neo4j", error=str(exc))
         finally:
-            driver.close()
+            if created_driver:
+                driver.close()
 
         return extracted
 

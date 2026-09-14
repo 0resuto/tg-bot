@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import redis.asyncio as aioredis
+from neo4j import Driver, GraphDatabase
 
 from bot.config import Settings
 from bot.infrastructure.database.engine import create_async_engine_instance, create_session_factory
@@ -40,6 +41,7 @@ class WebContainer:
         self.engine: Any = None
         self.session_factory: Any = None
         self.redis: aioredis.Redis | None = None
+        self.neo4j_driver: Driver | None = None
 
         # Repositories
         self.chat_repo: ChatRepository | None = None
@@ -105,6 +107,24 @@ class WebContainer:
                 timeout=self.settings.openai_timeout_seconds,
             )
 
+        # Neo4j Driver (shared for web queries & visualization)
+        if (
+            any(
+                item["id"] == "neo4j" and item["status"] == "ok"
+                for item in self.health_service.items
+            )
+            and self.settings.neo4j_password
+        ):
+            try:
+                self.neo4j_driver = GraphDatabase.driver(
+                    self.settings.neo4j_uri,
+                    auth=(self.settings.neo4j_user, self.settings.neo4j_password),
+                )
+            except Exception as exc:
+                logger.error("Failed to initialize Neo4j driver in WebContainer", error=str(exc))
+
+        self.graph_service = GraphVisualizerService(self.settings, driver=self.neo4j_driver)
+
         # Graphiti / Neo4j
         if (
             any(
@@ -144,6 +164,7 @@ class WebContainer:
         self.memory_query_service = MemoryQueryService(
             settings=self.settings,
             memory_service=self.memory_service,
+            driver=self.neo4j_driver,
         )
 
         # Response Service
@@ -220,5 +241,7 @@ class WebContainer:
             await self.engine.dispose()
         if self.redis:
             await self.redis.aclose()
+        if self.neo4j_driver:
+            self.neo4j_driver.close()
         if self.bot and self.bot.session:
             await self.bot.session.close()

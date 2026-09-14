@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from neo4j import GraphDatabase
+from neo4j import Driver, GraphDatabase
 
 from bot.config import Settings
 from bot.log import get_logger
@@ -29,8 +29,9 @@ def _serialize_neo4j_val(val: Any) -> Any:
 class GraphVisualizerService:
     """Encapsulates Cypher queries and visual representation logic for Vis.js Network."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, driver: Driver | None = None) -> None:
         self.settings = settings
+        self.driver = driver
 
     def _classify_node(self, labels: list[str], props: dict[str, Any]) -> dict[str, Any]:
         """Classify node category, icon, color palette, and geometric shape."""
@@ -140,10 +141,15 @@ class GraphVisualizerService:
         if not self.settings.neo4j_password:
             return [], []
 
-        driver = GraphDatabase.driver(
-            self.settings.neo4j_uri,
-            auth=(self.settings.neo4j_user, self.settings.neo4j_password),
-        )
+        driver = self.driver
+        created_driver = False
+        if driver is None:
+            driver = GraphDatabase.driver(
+                self.settings.neo4j_uri,
+                auth=(self.settings.neo4j_user, self.settings.neo4j_password),
+            )
+            created_driver = True
+
         nodes_dict: dict[str, dict[str, Any]] = {}
         edges_dict: dict[str, dict[str, Any]] = {}
 
@@ -226,7 +232,8 @@ class GraphVisualizerService:
                             "font": {"size": 10, "color": "#94a3b8", "background": "#0f172a"},
                         }
         finally:
-            driver.close()
+            if created_driver:
+                driver.close()
 
         return list(nodes_dict.values()), list(edges_dict.values())
 

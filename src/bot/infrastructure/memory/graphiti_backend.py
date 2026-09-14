@@ -8,6 +8,9 @@ from typing import Any
 
 import structlog
 from graphiti_core import Graphiti
+from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
+from graphiti_core.llm_client.config import LLMConfig
+from graphiti_core.llm_client.openai_client import OpenAIClient
 from graphiti_core.nodes import EpisodeType
 from pydantic import BaseModel, Field
 from tenacity import (
@@ -76,21 +79,17 @@ class GraphitiMemoryBackend(MemoryBackend):
         self.neo4j_password = neo4j_password
         self.entity_types = entity_types if entity_types is not None else DEFAULT_ENTITY_TYPES
 
-        # Configure Graphiti
-        import os
-
-        os.environ["OPENAI_API_KEY"] = openai_api_key
-        os.environ["NEO4J_URI"] = neo4j_uri
-        os.environ["NEO4J_USERNAME"] = neo4j_user
-        os.environ["NEO4J_PASSWORD"] = neo4j_password
-
-        # Additional settings for extraction / embedding could be set here
-        # or passed if graphiti exposes them directly in its Client
+        llm_client = OpenAIClient(LLMConfig(api_key=openai_api_key, model=extraction_model))
+        embedder = OpenAIEmbedder(
+            OpenAIEmbedderConfig(api_key=openai_api_key, embedding_model=embedding_model)
+        )
 
         self.client = Graphiti(
             uri=neo4j_uri,
             user=neo4j_user,
             password=neo4j_password,
+            llm_client=llm_client,
+            embedder=embedder,
         )
         self.is_initialized = False
 
@@ -173,10 +172,6 @@ class GraphitiMemoryBackend(MemoryBackend):
     )
     async def delete_facts(self, description: str, group_id: str) -> int:
         """Delete facts matching the description."""
-        import asyncio
-
-        from neo4j import GraphDatabase
-
         results = await self.client.search(
             query=description,
             group_ids=[group_id],
@@ -188,21 +183,13 @@ class GraphitiMemoryBackend(MemoryBackend):
         if not uuids:
             return 0
 
-        def _delete() -> int:
-            driver = GraphDatabase.driver(
-                self.neo4j_uri, auth=(self.neo4j_user, self.neo4j_password)
-            )
-            try:
-                with driver.session() as session:
-                    res = session.run(
-                        "MATCH ()-[r]->() WHERE r.uuid IN $uuids DELETE r RETURN count(r) as cnt",
-                        {"uuids": uuids},
-                    ).single()
-                    return int(res["cnt"]) if res else len(uuids)
-            finally:
-                driver.close()
-
-        return await asyncio.to_thread(_delete)
+        res = await self.client.driver.execute_query(
+            "MATCH ()-[r]->() WHERE r.uuid IN $uuids DELETE r RETURN count(r) as cnt",
+            params={"uuids": uuids},
+        )
+        if res.records:
+            return int(res.records[0]["cnt"])
+        return len(uuids)
 
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -212,53 +199,39 @@ class GraphitiMemoryBackend(MemoryBackend):
     )
     async def get_stats(self, group_id: str) -> MemoryStats:
         """Get graph statistics for the given group."""
-        import asyncio
+        entities_res = await self.client.driver.execute_query(
+            "MATCH (n) WHERE n.group_id = $group_id RETURN count(n) as cnt",
+            params={"group_id": group_id},
+        )
+        relations_res = await self.client.driver.execute_query(
+            "MATCH ()-[r]->() WHERE r.group_id = $group_id RETURN count(r) as cnt",
+            params={"group_id": group_id},
+        )
+        episodes_res = await self.client.driver.execute_query(
+            "MATCH (e:Episode) WHERE e.group_id = $group_id "
+            "RETURN count(e) as cnt, max(e.created_at) as last_ingested",
+            params={"group_id": group_id},
+        )
 
-        from neo4j import GraphDatabase
-
-        def _fetch_stats() -> MemoryStats:
-            driver = GraphDatabase.driver(
-                self.neo4j_uri, auth=(self.neo4j_user, self.neo4j_password)
-            )
-            try:
-                with driver.session() as session:
-                    entities_res = session.run(
-                        "MATCH (n) WHERE n.group_id = $group_id RETURN count(n) as cnt",
-                        {"group_id": group_id},
-                    ).single()
-                    relations_res = session.run(
-                        "MATCH ()-[r]->() WHERE r.group_id = $group_id RETURN count(r) as cnt",
-                        {"group_id": group_id},
-                    ).single()
-                    episodes_res = session.run(
-                        "MATCH (e:Episode) WHERE e.group_id = $group_id "
-                        "RETURN count(e) as cnt, max(e.created_at) as last_ingested",
-                        {"group_id": group_id},
-                    ).single()
-
+        last_ingested = None
+        if episodes_res.records and episodes_res.records[0]["last_ingested"]:
+            raw_ts = episodes_res.records[0]["last_ingested"]
+            if hasattr(raw_ts, "to_native"):
+                last_ingested = raw_ts.to_native()
+            elif isinstance(raw_ts, datetime):
+                last_ingested = raw_ts
+            elif isinstance(raw_ts, str):
+                try:
+                    last_ingested = datetime.fromisoformat(raw_ts)
+                except Exception:
                     last_ingested = None
-                    if episodes_res and episodes_res["last_ingested"]:
-                        raw_ts = episodes_res["last_ingested"]
-                        if hasattr(raw_ts, "to_native"):
-                            last_ingested = raw_ts.to_native()
-                        elif isinstance(raw_ts, datetime):
-                            last_ingested = raw_ts
-                        elif isinstance(raw_ts, str):
-                            try:
-                                last_ingested = datetime.fromisoformat(raw_ts)
-                            except Exception:
-                                last_ingested = None
 
-                    return MemoryStats(
-                        total_entities=int(entities_res["cnt"]) if entities_res else 0,
-                        total_relations=int(relations_res["cnt"]) if relations_res else 0,
-                        total_episodes=int(episodes_res["cnt"]) if episodes_res else 0,
-                        last_ingestion_at=last_ingested,
-                    )
-            finally:
-                driver.close()
-
-        return await asyncio.to_thread(_fetch_stats)
+        return MemoryStats(
+            total_entities=int(entities_res.records[0]["cnt"]) if entities_res.records else 0,
+            total_relations=int(relations_res.records[0]["cnt"]) if relations_res.records else 0,
+            total_episodes=int(episodes_res.records[0]["cnt"]) if episodes_res.records else 0,
+            last_ingestion_at=last_ingested,
+        )
 
     def _map_results_to_facts(self, results: Any) -> list[MemoryFact]:
         """Map Graphiti search results to MemoryFact domain models."""

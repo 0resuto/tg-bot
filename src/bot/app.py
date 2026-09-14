@@ -33,13 +33,12 @@ from bot.telegram.dispatcher import create_dispatcher
 logger = logging.getLogger(__name__)
 
 
-def run_migrations(settings: Settings) -> None:
+def run_migrations(settings: Settings | None = None) -> None:
     """Run alembic migrations synchronously in a thread."""
     import alembic.command
     import alembic.config
 
     alembic_cfg = alembic.config.Config("alembic.ini")
-    alembic_cfg.set_main_option("sqlalchemy.url", settings.postgres_dsn_sync)
     alembic.command.upgrade(alembic_cfg, "head")
     logger.info("Alembic migrations completed successfully.")
 

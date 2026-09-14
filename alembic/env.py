@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 from logging.config import fileConfig
 
+from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import context
@@ -28,7 +29,13 @@ target_metadata = Base.metadata
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     settings = Settings()
-    url = settings.postgres_dsn_sync
+    url = config.get_main_option("sqlalchemy.url") or settings.postgres_dsn_sync
+    # Offline mode only generates SQL scripts, so remove asyncpg driver prefix if present
+    if "+asyncpg" in url:
+        url = url.replace("+asyncpg", "", 1)
+    if "+psycopg" in url:
+        url = url.replace("+psycopg", "", 1)
+
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -51,7 +58,19 @@ async def run_async_migrations() -> None:
     and associate a connection with the context.
     """
     settings = Settings()
-    connectable = create_async_engine(settings.postgres_dsn)
+    url = config.get_main_option("sqlalchemy.url") or settings.postgres_dsn
+    # Ensure asyncpg driver dialect is used with create_async_engine
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif "+psycopg" in url:
+        url = url.replace("+psycopg", "+asyncpg", 1)
+
+    connectable = create_async_engine(
+        url,
+        poolclass=pool.NullPool,
+    )
 
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

@@ -5,7 +5,6 @@ Main application factory and lifecycle management.
 from __future__ import annotations
 
 import asyncio
-import logging
 import sys
 from typing import cast
 
@@ -18,8 +17,8 @@ from bot.infrastructure.database.engine import create_async_engine_instance, cre
 from bot.infrastructure.llm.openai_provider import OpenAILLMProvider
 from bot.infrastructure.memory.graphiti_backend import GraphitiMemoryBackend
 from bot.infrastructure.redis.client import create_redis_client
-from bot.interfaces.task_runner import AsyncioTaskRunner
-from bot.log import setup_logging
+from bot.infrastructure.tasks import AsyncioTaskRunner
+from bot.log import get_logger, setup_logging
 from bot.repositories import ChatRepository, MemberRepository
 from bot.services.admin_notifier import AdminNotifier
 from bot.services.context_builder import ContextBuilder
@@ -30,7 +29,7 @@ from bot.services.response_service import ResponseService
 from bot.services.sensitive_filter import SensitiveFilter
 from bot.telegram.dispatcher import create_dispatcher
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def run_migrations(settings: Settings | None = None) -> None:
@@ -133,7 +132,7 @@ async def main() -> None:
 
     async def on_flush_debouncer(chat_id: int, user_id: int, messages: list[ChatMessage]) -> None:
         """Callback for debouncer when messages are flushed."""
-        logger.info("Flushing %d messages for chat %s user %s", len(messages), chat_id, user_id)
+        logger.info("Flushing messages", count=len(messages), chat_id=chat_id, user_id=user_id)
         await memory_service.ingest_messages(chat_id, user_id, messages)
 
     debouncer = MessageDebouncer(
@@ -167,7 +166,7 @@ async def main() -> None:
         await graphiti_backend.init()
 
         bot_user = await bot.get_me()
-        logger.info("Bot info fetched: @%s (ID: %d)", bot_user.username, bot_user.id)
+        logger.info("Bot info fetched", username=bot_user.username, user_id=bot_user.id)
 
         nonlocal mention_detector
         mention_detector = MentionDetector(
@@ -185,7 +184,7 @@ async def main() -> None:
             allowed.add(settings.admin_user_id)
         if "allowlist" in dp:
             dp["allowlist"].update_allowed_chats(allowed)
-        logger.info("Startup complete, allowed chats: %s", allowed)
+        logger.info("Startup complete", allowed_chats=allowed)
 
     @dp.shutdown()
     async def on_shutdown(bot: Bot) -> None:

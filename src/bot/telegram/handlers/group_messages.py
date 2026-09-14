@@ -62,9 +62,10 @@ async def handle_group_message(
     if message.reply_to_message and message.reply_to_message.from_user:
         reply_to_user_id = message.reply_to_message.from_user.id
 
+    raw_text = message.text or message.caption or ""
     entities = message.entities or message.caption_entities
     is_mentioned = mention_detector.is_addressed(
-        text=text,
+        text=raw_text,
         entities=entities,
         reply_to_user_id=reply_to_user_id,
     )

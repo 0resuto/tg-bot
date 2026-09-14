@@ -18,7 +18,7 @@ class IsBotMentioned(Filter):
             reply_to_user_id = message.reply_to_message.from_user.id
 
         return mention_detector.is_addressed(
-            text=message.text or "",
-            entities=message.entities,
+            text=message.text or getattr(message, "caption", None) or "",
+            entities=message.entities or getattr(message, "caption_entities", None),
             reply_to_user_id=reply_to_user_id,
         )

@@ -57,11 +57,37 @@ class MentionDetector:
         """Check if the message is a reply to the bot."""
         return reply_to_user_id == self.bot_user_id
 
+    @staticmethod
+    def _extract_entity_text(text: str, entity: Any) -> str:
+        """Extract entity text supporting aiogram MessageEntity, dicts, and test mocks."""
+        if hasattr(entity, "extract_from"):
+            return entity.extract_from(text)
+        if hasattr(entity, "text") and entity.text:
+            return str(entity.text)
+
+        offset = (
+            entity.get("offset", 0) if isinstance(entity, dict) else getattr(entity, "offset", 0)
+        )
+        length = (
+            entity.get("length", 0) if isinstance(entity, dict) else getattr(entity, "length", 0)
+        )
+
+        if offset < 0 or length <= 0:
+            return ""
+
+        try:
+            encoded = text.encode("utf-16-le")
+            start = offset * 2
+            end = (offset + length) * 2
+            return encoded[start:end].decode("utf-16-le", errors="ignore")
+        except Exception:
+            return ""
+
     def is_bot_mentioned_entity(
         self, text: str, entities: Sequence[Any] | None, bot_username: str | None
     ) -> bool:
         """Check Telegram mention entities."""
-        if not entities or not bot_username:
+        if not entities or not bot_username or not text:
             return False
 
         bot_mention = f"@{bot_username}".lower()
@@ -70,23 +96,7 @@ class MentionDetector:
                 entity.get("type") if isinstance(entity, dict) else getattr(entity, "type", None)
             )
             if str(ent_type).lower() in ("mention", "messageentitytype.mention"):
-                if hasattr(entity, "extract_from"):
-                    mention_text = entity.extract_from(text)
-                elif hasattr(entity, "text") and entity.text:
-                    mention_text = entity.text
-                else:
-                    offset = (
-                        entity.get("offset", 0)
-                        if isinstance(entity, dict)
-                        else getattr(entity, "offset", 0)
-                    )
-                    length = (
-                        entity.get("length", 0)
-                        if isinstance(entity, dict)
-                        else getattr(entity, "length", 0)
-                    )
-                    mention_text = text[offset : offset + length]
-
+                mention_text = self._extract_entity_text(text, entity)
                 if mention_text and mention_text.lower() == bot_mention:
                     return True
         return False

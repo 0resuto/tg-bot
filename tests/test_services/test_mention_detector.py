@@ -72,3 +72,44 @@ def test_is_addressed_entities(detector):
 
     entities = [EntityMock("@ista_bot")]
     assert detector.is_addressed("Hello @ista_bot", entities=entities)
+
+
+def test_is_addressed_dict_entities_with_emoji(detector):
+    # Text: "🐶 @ista_bot"
+    # '🐶' is 1 Python char, but 2 UTF-16 code units.
+    # Space is 1 unit.
+    # '@ista_bot' starts at UTF-16 offset 3, length 9 code units.
+    text = "🐶 @ista_bot"
+    entities = [{"type": "mention", "offset": 3, "length": 9}]
+    assert detector.is_addressed(text, entities=entities)
+
+
+def test_is_addressed_dict_entities_with_flag(detector):
+    # Flag 🇺🇸 is 2 Regional Indicator code points, each is a surrogate pair (total 4 UTF-16 code units).
+    # "🇺🇸 @ista_bot": flag (4) + space (1) = offset 5.
+    text = "🇺🇸 @ista_bot"
+    entities = [{"type": "mention", "offset": 5, "length": 9}]
+    assert detector.is_addressed(text, entities=entities)
+
+
+def test_is_addressed_dict_entities_cjk(detector):
+    # CJK character "你" (1 code unit) + "好" (1 code unit) + space (1) = offset 3.
+    text = "你好 @ista_bot"
+    entities = [{"type": "mention", "offset": 3, "length": 9}]
+    assert detector.is_addressed(text, entities=entities)
+
+
+def test_is_addressed_dict_entities_invalid_offsets(detector):
+    text = "Hello @ista_bot"
+    # Negative offset
+    assert not detector.is_bot_mentioned_entity(
+        text, [{"type": "mention", "offset": -1, "length": 9}], "ista_bot"
+    )
+    # Zero or negative length
+    assert not detector.is_bot_mentioned_entity(
+        text, [{"type": "mention", "offset": 0, "length": 0}], "ista_bot"
+    )
+    # Out of bounds offset
+    assert not detector.is_bot_mentioned_entity(
+        text, [{"type": "mention", "offset": 100, "length": 9}], "ista_bot"
+    )

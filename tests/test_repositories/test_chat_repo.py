@@ -30,3 +30,14 @@ async def test_concurrent_upsert_chat(db_session):
     chat = await repo.get_chat(999)
     assert chat is not None
     assert chat.chat_id == 999
+
+
+async def test_deactivate_chat(db_session):
+    repo = ChatRepository(db_session)
+    await repo.upsert_chat(1, "Test Chat")
+    active = await repo.get_active_chat_ids()
+    assert 1 in active
+
+    await repo.deactivate_chat(1)
+    active_after = await repo.get_active_chat_ids()
+    assert 1 not in active_after

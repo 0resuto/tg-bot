@@ -155,8 +155,6 @@ class WebContainer:
             self.memory_service = MemoryService(
                 memory=self.memory_backend,
                 sensitive_filter=self.sensitive_filter,
-                redis_client=self.redis,
-                cache_ttl=self.settings.memory_user_summary_cache_ttl,
                 search_limit_quick=self.settings.memory_search_limit_quick,
                 search_limit_deep=self.settings.memory_search_limit_deep,
             )
@@ -199,7 +197,6 @@ class WebContainer:
                 context_builder=self.context_builder,
                 persona_prompt=self.settings.get_persona_prompt(),
                 response_model=self.settings.openai_response_model,
-                bot_language=self.settings.bot_language,
                 admin_notifier=self.admin_notifier,
             )
 
@@ -212,7 +209,6 @@ class WebContainer:
                         await self.memory_service.ingest_messages(c_id, u_id, msgs)
 
                 self.debouncer = MessageDebouncer(
-                    redis_client=self.redis,
                     debounce_seconds=float(self.settings.debounce_seconds),
                     on_flush=on_debounce_flush,
                 )

@@ -32,7 +32,7 @@ from bot.telegram.dispatcher import create_dispatcher
 logger = get_logger(__name__)
 
 
-def run_migrations(settings: Settings | None = None) -> None:
+def run_migrations() -> None:
     """Run alembic migrations synchronously in a thread."""
     import alembic.command
     import alembic.config
@@ -101,8 +101,6 @@ async def main() -> None:
     memory_service = MemoryService(
         memory=graphiti_backend,
         sensitive_filter=sensitive_filter,
-        redis_client=redis_client,
-        cache_ttl=settings.memory_user_summary_cache_ttl,
         search_limit_quick=settings.memory_search_limit_quick,
         search_limit_deep=settings.memory_search_limit_deep,
     )
@@ -122,7 +120,6 @@ async def main() -> None:
         context_builder=context_builder,
         persona_prompt=settings.get_persona_prompt(),
         response_model=settings.openai_response_model,
-        bot_language=settings.bot_language,
         admin_notifier=admin_notifier,
     )
 
@@ -136,7 +133,6 @@ async def main() -> None:
         await memory_service.ingest_messages(chat_id, user_id, messages)
 
     debouncer = MessageDebouncer(
-        redis_client=redis_client,
         debounce_seconds=settings.debounce_seconds,
         on_flush=on_flush_debouncer,
     )
@@ -163,7 +159,6 @@ async def main() -> None:
     @dp.startup()
     async def on_startup(bot: Bot) -> None:
         logger.info("Running startup hooks...")
-        await graphiti_backend.init()
 
         bot_user = await bot.get_me()
         logger.info("Bot info fetched", username=bot_user.username, user_id=bot_user.id)

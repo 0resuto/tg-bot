@@ -9,11 +9,6 @@ from __future__ import annotations
 from collections.abc import Coroutine
 from typing import Any, Protocol
 
-from bot.infrastructure.tasks.asyncio_runner import AsyncioTaskRunner
-from bot.log import get_logger
-
-logger = get_logger(__name__)
-
 
 class BackgroundTaskRunner(Protocol):
     """Abstraction for scheduling fire-and-forget async work."""
@@ -37,4 +32,4 @@ class BackgroundTaskRunner(Protocol):
         ...
 
 
-__all__ = ["BackgroundTaskRunner", "AsyncioTaskRunner"]
+__all__ = ["BackgroundTaskRunner"]

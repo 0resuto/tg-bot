@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import Any
 
 from bot.domain.models import ChatMessage
 from bot.log import get_logger
@@ -17,7 +16,6 @@ class MessageDebouncer:
 
     def __init__(
         self,
-        redis_client: Any = None,
         debounce_seconds: float = 10.0,
         on_flush: Callable[[int, int, list[ChatMessage]], Awaitable[None]] | None = None,
     ) -> None:

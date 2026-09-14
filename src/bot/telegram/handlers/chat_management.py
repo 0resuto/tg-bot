@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import structlog
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatMemberStatus, ChatType
 from aiogram.types import (
@@ -19,10 +18,11 @@ from aiogram.types import (
     InlineKeyboardMarkup,
 )
 
+from bot.log import get_logger
 from bot.telegram.filters.admin import IsAdminUser
 from bot.telegram.middlewares.allowlist import ChatAllowlistMiddleware
 
-logger = structlog.get_logger(__name__)
+logger = get_logger(__name__)
 
 chat_management_router = Router(name="chat_management")
 
@@ -106,12 +106,18 @@ async def on_bot_added_to_group(
 async def on_bot_removed_from_group(
     event: ChatMemberUpdated,
     allowlist: ChatAllowlistMiddleware | None = None,
+    chat_repo: Any = None,
 ) -> None:
-    """Clean up allowlist when the bot is removed from a group."""
+    """Clean up allowlist and deactivate chat when the bot is removed from a group."""
     chat_id = event.chat.id
     if allowlist is not None:
         allowlist.remove_chat(chat_id)
-    logger.info("Bot removed from group, removed from allowlist", chat_id=chat_id)
+    if chat_repo is not None:
+        try:
+            await chat_repo.deactivate_chat(chat_id)
+        except Exception:
+            logger.exception("Failed to deactivate chat in database", chat_id=chat_id)
+    logger.info("Bot removed from group, deactivated", chat_id=chat_id)
 
 
 # ---------------------------------------------------------------------------

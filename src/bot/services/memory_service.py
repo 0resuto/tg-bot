@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from bot.domain.models import ChatMessage, MemoryFact, MemoryStats
 from bot.interfaces.memory import MemoryBackend
 from bot.log import get_logger
 from bot.services.sensitive_filter import SensitiveFilter
-
-if TYPE_CHECKING:
-    import redis.asyncio as redis
 
 logger = get_logger(__name__)
 
@@ -20,16 +15,11 @@ class MemoryService:
         self,
         memory: MemoryBackend,
         sensitive_filter: SensitiveFilter,
-        redis_client: redis.Redis | None = None,
-        redis: redis.Redis | None = None,
-        cache_ttl: int = 300,
         search_limit_quick: int = 5,
         search_limit_deep: int = 15,
     ) -> None:
         self.memory = memory
         self.sensitive_filter = sensitive_filter
-        self.redis = redis_client or redis
-        self.cache_ttl = cache_ttl
         self.search_limit_quick = search_limit_quick
         self.search_limit_deep = search_limit_deep
 

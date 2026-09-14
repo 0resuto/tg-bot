@@ -25,13 +25,11 @@ def sensitive_filter():
 
 
 @pytest.fixture
-def memory_service(fake_redis, sensitive_filter):
+def memory_service(sensitive_filter):
     backend = MockMemoryBackend()
     return MemoryService(
         memory=backend,
         sensitive_filter=sensitive_filter,
-        redis=fake_redis,
-        cache_ttl=60,
         search_limit_quick=5,
         search_limit_deep=15,
     )

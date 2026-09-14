@@ -10,11 +10,12 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-import structlog
 from aiogram import BaseMiddleware
 from aiogram.types import ChatMemberUpdated, TelegramObject
 
-logger = structlog.get_logger(__name__)
+from bot.log import get_logger
+
+logger = get_logger(__name__)
 
 
 class ChatAllowlistMiddleware(BaseMiddleware):

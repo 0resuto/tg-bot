@@ -6,7 +6,6 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-import structlog
 from graphiti_core import Graphiti
 from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client.config import LLMConfig
@@ -22,8 +21,9 @@ from tenacity import (
 
 from bot.domain.models import MemoryFact, MemoryStats
 from bot.interfaces import MemoryBackend
+from bot.log import get_logger
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 class Person(BaseModel):
@@ -74,9 +74,6 @@ class GraphitiMemoryBackend(MemoryBackend):
         embedding_model: str,
         entity_types: dict[str, type[BaseModel]] | None = None,
     ):
-        self.neo4j_uri = neo4j_uri
-        self.neo4j_user = neo4j_user
-        self.neo4j_password = neo4j_password
         self.entity_types = entity_types if entity_types is not None else DEFAULT_ENTITY_TYPES
 
         llm_client = OpenAIClient(LLMConfig(api_key=openai_api_key, model=extraction_model))
@@ -91,13 +88,6 @@ class GraphitiMemoryBackend(MemoryBackend):
             llm_client=llm_client,
             embedder=embedder,
         )
-        self.is_initialized = False
-
-    async def init(self) -> None:
-        """Initialize the Graphiti client connections."""
-        # Typically Graphiti async setup would go here.
-        # graphiti_core handles neo4j connections.
-        self.is_initialized = True
 
     async def close(self) -> None:
         """Close connections."""

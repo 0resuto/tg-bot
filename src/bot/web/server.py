@@ -76,8 +76,6 @@ def create_web_app(
     # Chat Simulator Endpoints (Guarded by controller when disabled)
     app.router.add_post("/api/simulator/send_message", handle_send_message)
     app.router.add_get("/api/simulator/presets", handle_get_presets)
-    # Backward compatibility alias
-    app.router.add_post("/api/send_message", handle_send_message)
 
     # Static Assets
     dist_dir = config.static_dir

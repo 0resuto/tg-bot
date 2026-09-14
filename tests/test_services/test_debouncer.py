@@ -10,13 +10,13 @@ from bot.services.debouncer import MessageDebouncer
 
 
 @pytest.fixture
-def debouncer(fake_redis):
+def debouncer():
     flushed_batches = []
 
     async def on_flush(chat_id, user_id, messages):
         flushed_batches.append((chat_id, user_id, messages))
 
-    d = MessageDebouncer(fake_redis, debounce_seconds=0.1, on_flush=on_flush)
+    d = MessageDebouncer(debounce_seconds=0.1, on_flush=on_flush)
     d.flushed_batches = flushed_batches
     return d
 
@@ -55,11 +55,11 @@ async def test_debouncer_shutdown_flushes_pending(debouncer):
     assert debouncer.flushed_batches[0][2][0].text == "shutting down soon"
 
 
-async def test_debouncer_callback_exception_handled(fake_redis):
+async def test_debouncer_callback_exception_handled():
     async def failing_flush(chat_id, user_id, messages):
         raise RuntimeError("Ingestion backend failure")
 
-    d = MessageDebouncer(fake_redis, debounce_seconds=0.05, on_flush=failing_flush)
+    d = MessageDebouncer(debounce_seconds=0.05, on_flush=failing_flush)
     msg = ChatMessage(1, 10, "will fail", datetime.now(), 103, "Alice", None)
     await d.on_message(msg)
 

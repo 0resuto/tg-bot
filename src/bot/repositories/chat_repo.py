@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -47,5 +47,12 @@ class ChatRepository:
                     set_=update_set,
                 )
             )
+            await session.execute(stmt)
+            await session.commit()
+
+    async def deactivate_chat(self, chat_id: int) -> None:
+        """Deactivate a chat atomically."""
+        async with self.session_factory() as session:
+            stmt = update(ChatORM).where(ChatORM.chat_id == chat_id).values(is_active=False)
             await session.execute(stmt)
             await session.commit()

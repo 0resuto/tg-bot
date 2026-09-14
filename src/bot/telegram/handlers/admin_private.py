@@ -6,17 +6,17 @@ from __future__ import annotations
 
 from typing import Any
 
-import structlog
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
-from bot.config import Settings  # type: ignore
+from bot.config import Settings
 from bot.domain.models import ChatMessage, MemberIdentity
+from bot.log import get_logger
 from bot.telegram.filters.admin import IsAdminUser
 from bot.telegram.media import extract_message_content
 
-logger = structlog.get_logger(__name__)
+logger = get_logger(__name__)
 
 admin_private_router = Router(name="admin_private")
 
@@ -41,11 +41,13 @@ async def cmd_forget_fact(
         return
 
     active_chats = await chat_repo.get_active_chat_ids()
-    if not active_chats:
+    group_chats = [cid for cid in active_chats if cid != message.chat.id]
+    if not group_chats:
         await message.reply("No active group chats found.")
         return
 
-    target_chat_id = active_chats[0]
+    neg_groups = [cid for cid in group_chats if cid < 0]
+    target_chat_id = neg_groups[0] if neg_groups else group_chats[0]
 
     try:
         deleted_count = await memory_service.forget_fact(description, chat_id=target_chat_id)
@@ -63,11 +65,13 @@ async def cmd_memory_stats(
     member_repo: Any,
 ) -> None:
     active_chats = await chat_repo.get_active_chat_ids()
-    if not active_chats:
+    group_chats = [cid for cid in active_chats if cid != message.chat.id]
+    if not group_chats:
         await message.reply("No active group chats found.")
         return
 
-    target_chat_id = active_chats[0]
+    neg_groups = [cid for cid in group_chats if cid < 0]
+    target_chat_id = neg_groups[0] if neg_groups else group_chats[0]
 
     try:
         mem_stats = await memory_service.get_stats(chat_id=target_chat_id)
@@ -169,11 +173,7 @@ async def handle_admin_private_message(
     if response:
         sent_message = await message.reply(response)
         # Store bot response in private context
-        bot_name = (
-            settings.bot_names.split(",")[0].strip()
-            if hasattr(settings, "bot_names") and settings.bot_names
-            else "Bot"
-        )
+        bot_name = settings.bot_name_list[0] if settings.bot_name_list else "Bot"
         bot_chat_msg = ChatMessage(
             chat_id=message.chat.id,
             user_id=message.bot.id if message.bot else 0,

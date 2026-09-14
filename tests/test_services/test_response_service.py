@@ -32,7 +32,6 @@ def response_service(fake_redis):
         context_builder=MockContextBuilder(),
         persona_prompt="You are a bot.",
         response_model="test-model",
-        bot_language="en",
     )
 
 
@@ -83,7 +82,6 @@ async def test_generate_response_with_memory_chat_ids():
         context_builder=MockContextWithMessages(),
         persona_prompt="You are Ista.",
         response_model="test-model",
-        bot_language="ru",
     )
 
     res = await svc.generate_response(
@@ -129,7 +127,6 @@ async def test_generate_response_error_notifies_admin():
         context_builder=MockContextBuilder(),
         persona_prompt="You are a bot.",
         response_model="test-model",
-        bot_language="ru",
         admin_notifier=mock_notifier,
     )
 

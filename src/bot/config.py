@@ -76,10 +76,8 @@ class Settings(BaseSettings):
     context_window_minutes: int = 15
     context_min_messages: int = 10
     context_ttl_seconds: int = 86400 * 14  # 14 days
-    proactive_replies_enabled: bool = False
     memory_search_limit_quick: int = 5
     memory_search_limit_deep: int = 15
-    memory_user_summary_cache_ttl: int = 300  # seconds
 
     # -- Sensitive Topic Filter --------------------------------------------
     sensitive_filter_enabled: bool = True

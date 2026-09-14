@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import openai
-import structlog
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -14,8 +13,9 @@ from tenacity import (
 )
 
 from bot.interfaces import LLMProvider
+from bot.log import get_logger
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 class OpenAILLMProvider(LLMProvider):

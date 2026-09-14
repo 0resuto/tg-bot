@@ -25,7 +25,6 @@ class ResponseService:
         context_builder: ContextBuilder,
         persona_prompt: str,
         response_model: str,
-        bot_language: str = "ru",
         admin_notifier: AdminNotifier | None = None,
     ) -> None:
         self.llm = llm
@@ -33,7 +32,6 @@ class ResponseService:
         self.context_builder = context_builder
         self.persona_prompt = persona_prompt
         self.response_model = response_model
-        self.bot_language = bot_language
         self.admin_notifier = admin_notifier
 
     async def generate_response(
@@ -94,7 +92,7 @@ class ResponseService:
                 messages=messages,
                 model=self.response_model,
                 temperature=0.7,
-                max_tokens=800,
+                max_tokens=250,
             )
         except Exception as e:
             logger.error("Error generating LLM response", exc_info=e, chat_id=chat_id)
@@ -106,7 +104,9 @@ class ResponseService:
                         error=e,
                     )
                 except Exception as notify_err:
-                    logger.error("Failed to notify admin about LLM response error: %s", notify_err)
+                    logger.error(
+                        "Failed to notify admin about LLM response error", error=str(notify_err)
+                    )
             if raise_on_error:
                 raise
             return "Извините, произошла ошибка при генерации ответа."

@@ -23,14 +23,12 @@ class SensitiveFilter:
 
     def __init__(self, enabled: bool, categories: list[str]) -> None:
         self.enabled = enabled
-        self.active_categories = []
 
         # Compile patterns for active categories
         self.patterns: dict[SensitiveCategory, re.Pattern] = {}
         for cat_str in categories:
             try:
                 cat = SensitiveCategory(cat_str.lower())
-                self.active_categories.append(cat)
                 pattern_str = self.DEFAULT_PATTERNS.get(cat, "")
                 if pattern_str:
                     self.patterns[cat] = re.compile(pattern_str, re.IGNORECASE | re.UNICODE)

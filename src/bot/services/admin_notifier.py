@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import html
-import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+
+from bot.log import get_logger
 
 if TYPE_CHECKING:
     from aiogram import Bot
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AdminNotifier:
@@ -84,7 +85,7 @@ class AdminNotifier:
             try:
                 sub(alert_entry)
             except Exception as sub_err:
-                logger.error("Error in alert subscriber: %s", sub_err)
+                logger.error("Error in alert subscriber", error=str(sub_err))
 
         if not self.admin_chat_id or not self.bot:
             logger.warning(
@@ -100,4 +101,4 @@ class AdminNotifier:
                 parse_mode="HTML",
             )
         except Exception as send_err:
-            logger.error("Failed to send admin notification message: %s", send_err)
+            logger.error("Failed to send admin notification message", error=str(send_err))

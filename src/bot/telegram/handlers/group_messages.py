@@ -6,15 +6,15 @@ from __future__ import annotations
 
 from typing import Any
 
-import structlog
 from aiogram import F, Router
 from aiogram.enums import ChatType as EnumChatType
 from aiogram.types import Message
 
 from bot.domain.models import ChatMessage, MemberIdentity
+from bot.log import get_logger
 from bot.telegram.media import extract_message_content
 
-logger = structlog.get_logger(__name__)
+logger = get_logger(__name__)
 
 group_messages_router = Router(name="group_messages")
 

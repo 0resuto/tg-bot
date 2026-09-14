@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { api } from './services/api';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { api, ApiError, setAuthPromptCallback } from './services/api';
 import {
   ChatInfo,
   ContextMessage,
@@ -15,6 +15,7 @@ import {
 import { Header } from './components/Header';
 import { Sidebar, TabType } from './components/Sidebar';
 import { ErrorBanner } from './components/ErrorBanner';
+import { AuthModal } from './components/AuthModal';
 import { OverviewView } from './views/OverviewView';
 import { KnowledgeGraphView } from './views/KnowledgeGraphView';
 import { MemoriesView } from './views/MemoriesView';
@@ -30,6 +31,8 @@ export const App: React.FC = () => {
 
   const [chats, setChats] = useState<ChatInfo[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
+  const selectedChatIdRef = useRef(selectedChatId);
+  selectedChatIdRef.current = selectedChatId;
 
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [healthData, setHealthData] = useState<SystemChecklistResponse | null>(null);
@@ -42,40 +45,56 @@ export const App: React.FC = () => {
   const [contextMessages, setContextMessages] = useState<ContextMessage[]>([]);
   const [logs, setLogs] = useState<LogEvent[]>([]);
 
-  // Simulator states
   const [simulatorUsers, setSimulatorUsers] = useState<PresetUser[]>([]);
   const [simulatorPresets, setSimulatorPresets] = useState<SimulatorPreset[]>([]);
   const [simulatedMessages, setSimulatedMessages] = useState<SimulatedMessage[]>([]);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const msgIdCounter = useRef(0);
 
   const [errorBanner, setErrorBanner] = useState<{ title: string; error: string; details?: string | null } | null>(null);
+  const [pollingError, setPollingError] = useState<string | null>(null);
 
-  const handleSelectTab = (tab: TabType) => {
-    setActiveTab(tab);
-    localStorage.setItem('dashboard_active_tab', tab);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalError, setAuthModalError] = useState<string | null>(null);
+  const authResolveRef = useRef<((key: string | null) => void) | null>(null);
+
+  useEffect(() => {
+    setAuthPromptCallback((resolve) => {
+      authResolveRef.current = resolve;
+      setAuthModalOpen(true);
+      setAuthModalError(null);
+    });
+    return () => setAuthPromptCallback(null);
+  }, []);
+
+  const handleAuthSubmit = (key: string) => {
+    setAuthModalOpen(false);
+    setAuthModalError(null);
+    authResolveRef.current?.(key);
+    authResolveRef.current = null;
   };
 
-  // Load chats on mount
-  useEffect(() => {
-    api.getChats().then((data) => {
-      setChats(data);
-      if (data.length > 0 && selectedChatId === null) {
-        setSelectedChatId(data[0].chat_id);
-      }
-    }).catch((err) => {
-      console.error('Failed to load chats', err);
-    });
+  const handleAuthSkip = () => {
+    setAuthModalOpen(false);
+    setAuthModalError(null);
+    authResolveRef.current?.(null);
+    authResolveRef.current = null;
+  };
+
+  const handleSelectTab = useCallback((tab: TabType) => {
+    setActiveTab(tab);
+    localStorage.setItem('dashboard_active_tab', tab);
   }, []);
 
   const presetsLoadedRef = useRef(false);
 
-  // Periodic refresh
-  const refreshAllData = async () => {
+  const refreshAllData = useCallback(async () => {
+    const chatId = selectedChatIdRef.current;
     try {
       const [statsRes, memoriesRes, contextRes, logsRes, chatsRes] = await Promise.all([
-        api.getStats(selectedChatId ?? undefined),
-        api.getMemories(selectedChatId ?? undefined),
-        api.getContext(selectedChatId ?? undefined),
+        api.getStats(chatId ?? undefined),
+        api.getMemories(chatId ?? undefined),
+        api.getContext(chatId ?? undefined),
         api.getLogs(),
         api.getChats(),
       ]);
@@ -97,40 +116,51 @@ export const App: React.FC = () => {
           setSimulatorPresets(p.presets || []);
         }).catch((err) => {
           console.error('Failed to load simulator presets', err);
-          presetsLoadedRef.current = false;
         });
       }
+
+      setPollingError(null);
     } catch (err: any) {
       console.error('Refresh cycle failed', err);
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        setPollingError(null);
+      } else {
+        setPollingError(err.message || 'Ошибка соединения с сервером');
+      }
     }
-  };
+  }, []);
 
   useEffect(() => {
     refreshAllData();
     const interval = setInterval(refreshAllData, 5000);
     return () => clearInterval(interval);
-  }, [selectedChatId]);
+  }, [selectedChatId, refreshAllData]);
 
-  // Load graph when tab is active or chat changes
-  const loadGraph = async () => {
+  const loadGraph = useCallback(async () => {
     setLoadingGraph(true);
     try {
-      const data = await api.getGraph(selectedChatId ?? undefined);
+      const data = await api.getGraph(selectedChatIdRef.current ?? undefined);
       setGraphData(data);
     } catch (err: any) {
       console.error('Failed to load graph', err);
     } finally {
       setLoadingGraph(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (activeTab === 'graph' || activeTab === 'overview') {
+    if (activeTab === 'graph') {
       loadGraph();
     }
-  }, [activeTab, selectedChatId]);
+  }, [activeTab, loadGraph]);
 
-  const handleRefreshHealth = async () => {
+  useEffect(() => {
+    if (activeTab === 'graph') {
+      loadGraph();
+    }
+  }, [selectedChatId, activeTab, loadGraph]);
+
+  const handleRefreshHealth = useCallback(async () => {
     setIsRefreshingHealth(true);
     try {
       const data = await api.getHealth();
@@ -144,19 +174,19 @@ export const App: React.FC = () => {
     } finally {
       setIsRefreshingHealth(false);
     }
-  };
+  }, [refreshAllData]);
 
-  const handleForgetFact = async (description: string) => {
-    if (!selectedChatId) return 0;
-    const res = await api.forgetFact(description, selectedChatId);
+  const handleForgetFact = useCallback(async (description: string) => {
+    if (!selectedChatIdRef.current) return 0;
+    const res = await api.forgetFact(description, selectedChatIdRef.current);
     refreshAllData();
     loadGraph();
     return res.deleted_count || 0;
-  };
+  }, [refreshAllData, loadGraph]);
 
-  const handleSendSimulatedMessage = async (user: PresetUser, text: string, replyToBot: boolean) => {
+  const handleSendSimulatedMessage = useCallback(async (user: PresetUser, text: string, replyToBot: boolean) => {
     setSendingMessage(true);
-    const optimisticId = Date.now();
+    const optimisticId = `opt-${++msgIdCounter.current}`;
     setSimulatedMessages((prev) => [
       ...prev,
       {
@@ -187,8 +217,8 @@ export const App: React.FC = () => {
           )
         );
       } else {
-        setSimulatedMessages((prev) =>
-          prev.map((m) =>
+        setSimulatedMessages((prev) => {
+          const updated = prev.map((m) =>
             m.id === optimisticId
               ? {
                   ...m,
@@ -197,28 +227,24 @@ export const App: React.FC = () => {
                   trigger_reason: data.trigger_reason,
                 }
               : m
-          )
-        );
+          );
 
-        if (data.bot_reply) {
-          setSimulatedMessages((prev) => [
-            ...prev,
-            {
-              id: Date.now() + 1,
+          const newMsgs: SimulatedMessage[] = [];
+
+          if (data.bot_reply) {
+            newMsgs.push({
+              id: `bot-${++msgIdCounter.current}`,
               user_name: `${data.bot_names ? data.bot_names[0] : 'Bot'} (Bot)`,
               text: data.bot_reply,
               timestamp: new Date().toISOString(),
               is_bot: true,
-            },
-          ]);
-        }
+            });
+          }
 
-        if (data.admin_alerts && Array.isArray(data.admin_alerts) && data.admin_alerts.length > 0) {
-          data.admin_alerts.forEach((alert: any, idx: number) => {
-            setSimulatedMessages((prev) => [
-              ...prev,
-              {
-                id: Date.now() + 2 + idx,
+          if (data.admin_alerts && Array.isArray(data.admin_alerts) && data.admin_alerts.length > 0) {
+            for (const alert of data.admin_alerts) {
+              newMsgs.push({
+                id: `alert-${++msgIdCounter.current}`,
                 user_name: '👑 Оповещение администратору (Telegram Alert)',
                 text: alert.error_msg || alert.formatted_text || 'Ошибка при генерации ответа',
                 timestamp: alert.timestamp || new Date().toISOString(),
@@ -229,10 +255,12 @@ export const App: React.FC = () => {
                   error_msg: alert.error_msg,
                   context_info: alert.context_info,
                 },
-              },
-            ]);
-          });
-        }
+              });
+            }
+          }
+
+          return newMsgs.length > 0 ? [...updated, ...newMsgs] : updated;
+        });
       }
       refreshAllData();
       loadGraph();
@@ -244,22 +272,23 @@ export const App: React.FC = () => {
     } finally {
       setSendingMessage(false);
     }
-  };
+  }, [refreshAllData, loadGraph]);
 
   const botName = stats?.bot_names?.[0] || 'Bot';
   const checklist = healthData?.items || stats?.checklist || [];
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 font-sans">
-      {/* Top Header */}
+      <AuthModal isOpen={authModalOpen} onSubmit={handleAuthSubmit} onSkip={handleAuthSkip} error={authModalError} />
+
       <Header
         stats={stats}
         botStatus={stats?.all_ready ? 'ready' : 'error'}
         onRefresh={handleRefreshHealth}
         isRefreshing={isRefreshingHealth}
+        pollingError={pollingError}
       />
 
-      {/* Global Error Banner */}
       {errorBanner && (
         <ErrorBanner
           title={errorBanner.title}
@@ -269,7 +298,6 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* Main App Layout */}
       <div className="flex-1 flex overflow-hidden">
         <Sidebar
           activeTab={activeTab}
@@ -287,9 +315,9 @@ export const App: React.FC = () => {
             <OverviewView
               stats={stats}
               checklist={checklist}
-              factsCount={memories.length}
-              graphNodesCount={graphData?.nodes?.length || 0}
-              graphEdgesCount={graphData?.edges?.length || 0}
+              factsCount={stats?.memory_stats?.total_episodes ?? memories.length}
+              graphNodesCount={stats?.memory_stats?.total_entities ?? 0}
+              graphEdgesCount={stats?.memory_stats?.total_relations ?? 0}
               contextMessagesCount={contextMessages.length}
               onNavigate={handleSelectTab}
               onRefreshHealth={handleRefreshHealth}

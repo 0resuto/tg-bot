@@ -22,7 +22,7 @@ interface SidebarProps {
   messagesCount?: number;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
+export const Sidebar: React.FC<SidebarProps> = React.memo(({
   activeTab,
   onSelectTab,
   chats,
@@ -44,14 +44,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-4 flex-shrink-0">
       <div className="space-y-4">
-        {/* Chat Selector */}
         <ChatSelector
           chats={chats}
           selectedChatId={selectedChatId}
           onSelectChat={onSelectChat}
         />
 
-        {/* Navigation list */}
         <div className="space-y-1 pt-2">
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-3 pb-1">
             Управление и мониторинг
@@ -87,7 +85,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </div>
 
-        {/* Simulator Section (Conditionally mounted!) */}
         {enableSimulator && (
           <div className="pt-4 border-t border-slate-800 space-y-1">
             <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500/80 px-3 pb-1 flex items-center space-x-1">
@@ -114,10 +111,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* Footer info */}
       <div className="text-[11px] text-slate-500 pt-4 border-t border-slate-800 text-center">
         <span>Telegram Memory Bot v0.1</span>
       </div>
     </aside>
   );
-};
+});

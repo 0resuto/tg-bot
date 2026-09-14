@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
 import { GraphEdge, GraphNode, GraphResponse, SelectedGraphItem } from '../types';
@@ -8,6 +8,15 @@ interface KnowledgeGraphViewProps {
   loadingGraph: boolean;
   onRefreshGraph: () => void;
 }
+
+const GROUP_MAP: Record<string, string> = {
+  persons: 'Person',
+  animals: 'Animal',
+  items: 'Item',
+  locations: 'Location',
+  concepts: 'Concept',
+  episodes: 'Episodic',
+};
 
 export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   graphData,
@@ -21,31 +30,33 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   const [physicsEnabled, setPhysicsEnabled] = useState(true);
   const [selectedItem, setSelectedItem] = useState<SelectedGraphItem | null>(null);
 
-  const initOrUpdateNetwork = () => {
-    if (!containerRef.current || !graphData?.nodes) return;
-
-    let filteredNodes: GraphNode[] = graphData.nodes;
-    if (graphFilter === 'persons') {
-      filteredNodes = filteredNodes.filter((n) => n.group === 'Person');
-    } else if (graphFilter === 'animals') {
-      filteredNodes = filteredNodes.filter((n) => n.group === 'Animal');
-    } else if (graphFilter === 'items') {
-      filteredNodes = filteredNodes.filter((n) => n.group === 'Item');
-    } else if (graphFilter === 'locations') {
-      filteredNodes = filteredNodes.filter((n) => n.group === 'Location');
-    } else if (graphFilter === 'concepts') {
-      filteredNodes = filteredNodes.filter((n) => n.group === 'Concept');
-    } else if (graphFilter === 'episodes') {
-      filteredNodes = filteredNodes.filter((n) => n.group === 'Episodic');
-    }
-
+  const filteredData = useMemo(() => {
+    if (!graphData?.nodes) return { nodes: [] as GraphNode[], edges: [] as GraphEdge[] };
+    const group = GROUP_MAP[graphFilter];
+    const filteredNodes = group
+      ? graphData.nodes.filter((n) => n.group === group)
+      : graphData.nodes;
     const nodeIds = new Set(filteredNodes.map((n) => n.id));
-    const filteredEdges: GraphEdge[] = (graphData.edges || []).filter(
+    const filteredEdges = (graphData.edges || []).filter(
       (e) => nodeIds.has(e.from) && nodeIds.has(e.to)
     );
+    return { nodes: filteredNodes, edges: filteredEdges };
+  }, [graphData, graphFilter]);
 
-    const nodesDataSet = new DataSet<any>(filteredNodes as any);
-    const edgesDataSet = new DataSet<any>(filteredEdges as any);
+  const nodeCounts = useMemo(() => {
+    if (!graphData?.nodes) return {} as Record<string, number>;
+    const counts: Record<string, number> = { all: graphData.nodes.length };
+    for (const n of graphData.nodes) {
+      counts[n.group] = (counts[n.group] || 0) + 1;
+    }
+    return counts;
+  }, [graphData]);
+
+  useEffect(() => {
+    if (!containerRef.current || filteredData.nodes.length === 0) return;
+
+    const nodesDataSet = new DataSet<any>(filteredData.nodes as any);
+    const edgesDataSet = new DataSet<any>(filteredData.edges as any);
 
     const options = {
       nodes: {
@@ -91,7 +102,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       net.on('selectNode', (params) => {
         if (params.nodes.length > 0) {
           const nId = params.nodes[0];
-          const node = graphData.nodes.find((x) => x.id === nId);
+          const node = graphData?.nodes.find((x) => x.id === nId);
           if (node) setSelectedItem({ type: 'node', data: node });
         }
       });
@@ -99,7 +110,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       net.on('selectEdge', (params) => {
         if (params.nodes.length === 0 && params.edges.length > 0) {
           const eId = params.edges[0];
-          const edge = graphData.edges.find((x) => x.id === eId);
+          const edge = graphData?.edges.find((x) => x.id === eId);
           if (edge) setSelectedItem({ type: 'edge', data: edge });
         }
       });
@@ -107,11 +118,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       net.on('deselectNode', () => setSelectedItem(null));
       net.on('deselectEdge', () => setSelectedItem(null));
     }
-  };
-
-  useEffect(() => {
-    initOrUpdateNetwork();
-  }, [graphData, graphFilter, physicsEnabled]);
+  }, [filteredData, physicsEnabled, graphData]);
 
   useEffect(() => {
     return () => {
@@ -120,46 +127,22 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     };
   }, []);
 
+  const neo4jBrowserUrl = import.meta.env.VITE_NEO4J_BROWSER_URL || 'http://127.0.0.1:17474';
+
   return (
     <div className="flex flex-col h-full p-6 space-y-4">
-      {/* Top Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-2xl p-3.5 text-xs shadow-sm">
-        {/* Filters */}
         <div className="flex items-center space-x-2 flex-wrap gap-y-1">
           <span className="font-semibold text-slate-300 mr-1">Фильтр сущностей:</span>
           <div className="flex flex-wrap rounded-lg bg-slate-950 p-1 border border-slate-800 gap-1">
             {[
-              { id: 'all', label: `Все (${graphData?.nodes?.length || 0})`, color: 'bg-sky-600' },
-              {
-                id: 'persons',
-                label: `👤 Люди (${graphData?.nodes?.filter((n) => n.group === 'Person').length || 0})`,
-                color: 'bg-emerald-600',
-              },
-              {
-                id: 'animals',
-                label: `🐾 Животные (${graphData?.nodes?.filter((n) => n.group === 'Animal').length || 0})`,
-                color: 'bg-purple-600',
-              },
-              {
-                id: 'items',
-                label: `📦 Предметы (${graphData?.nodes?.filter((n) => n.group === 'Item').length || 0})`,
-                color: 'bg-blue-600',
-              },
-              {
-                id: 'locations',
-                label: `📍 Локации (${graphData?.nodes?.filter((n) => n.group === 'Location').length || 0})`,
-                color: 'bg-orange-600',
-              },
-              {
-                id: 'concepts',
-                label: `💡 Концепты (${graphData?.nodes?.filter((n) => n.group === 'Concept').length || 0})`,
-                color: 'bg-yellow-600',
-              },
-              {
-                id: 'episodes',
-                label: `💬 Эпизоды (${graphData?.nodes?.filter((n) => n.group === 'Episodic').length || 0})`,
-                color: 'bg-violet-600',
-              },
+              { id: 'all', label: `Все (${nodeCounts.all || 0})`, color: 'bg-sky-600' },
+              { id: 'persons', label: `👤 Люди (${nodeCounts.Person || 0})`, color: 'bg-emerald-600' },
+              { id: 'animals', label: `🐾 Животные (${nodeCounts.Animal || 0})`, color: 'bg-purple-600' },
+              { id: 'items', label: `📦 Предметы (${nodeCounts.Item || 0})`, color: 'bg-blue-600' },
+              { id: 'locations', label: `📍 Локации (${nodeCounts.Location || 0})`, color: 'bg-orange-600' },
+              { id: 'concepts', label: `💡 Концепты (${nodeCounts.Concept || 0})`, color: 'bg-yellow-600' },
+              { id: 'episodes', label: `💬 Эпизоды (${nodeCounts.Episodic || 0})`, color: 'bg-violet-600' },
             ].map((f) => (
               <button
                 key={f.id}
@@ -176,7 +159,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex items-center space-x-2">
           <button
             onClick={onRefreshGraph}
@@ -209,7 +191,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             <span>{physicsEnabled ? 'Физика: Вкл' : 'Физика: Пауза'}</span>
           </button>
           <a
-            href="http://127.0.0.1:17474"
+            href={neo4jBrowserUrl}
             target="_blank"
             rel="noreferrer"
             className="px-3 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 rounded-lg border border-emerald-800 flex items-center space-x-1.5 transition"
@@ -220,7 +202,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         </div>
       </div>
 
-      {/* Legend */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 bg-slate-900/60 border border-slate-800 rounded-xl px-4 py-2 text-xs">
         <span className="text-slate-400 font-semibold">Легенда:</span>
         <span className="inline-flex items-center space-x-1.5">
@@ -249,7 +230,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         </span>
       </div>
 
-      {/* Canvas Area */}
       <div className="flex-1 min-h-[460px] bg-slate-950 rounded-2xl border border-slate-800 relative overflow-hidden shadow-inner flex flex-col">
         {loadingGraph && (
           <div className="absolute inset-0 bg-slate-950/80 z-10 flex items-center justify-center text-sky-400 text-sm space-x-2">
@@ -272,19 +252,18 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         <div ref={containerRef} className="w-full h-full" />
       </div>
 
-      {/* Inspector Details */}
       {selectedItem && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs shadow-lg animate-in fade-in">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs shadow-lg">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
             <div className="flex items-center space-x-2">
               <span className="text-lg">{selectedItem.type === 'node' ? '📍' : '🔗'}</span>
               <span className="font-bold text-white text-sm">
                 {selectedItem.type === 'node'
-                  ? selectedItem.data.full_name
-                  : selectedItem.data.full_fact || selectedItem.data.type}
+                  ? (selectedItem.data as { full_name?: string }).full_name
+                  : (selectedItem.data as GraphEdge).full_fact || (selectedItem.data as GraphEdge).type}
               </span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-800 text-sky-300">
-                {selectedItem.type === 'node' ? selectedItem.data.group : 'СВЯЗЬ'}
+                {selectedItem.type === 'node' ? (selectedItem.data as GraphNode).group : 'СВЯЗЬ'}
               </span>
             </div>
             <button
@@ -295,7 +274,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             </button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[11px]">
-            {Object.entries(selectedItem.data.properties || {}).map(([k, v]) => (
+            {Object.entries((selectedItem.data as GraphNode | GraphEdge).properties || {}).map(([k, v]) => (
               <div key={k} className="p-2 bg-slate-950/60 rounded-lg border border-slate-800">
                 <div className="text-slate-500 text-[10px]">{k}</div>
                 <div className="text-slate-200 truncate" title={String(v)}>

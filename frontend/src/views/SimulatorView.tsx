@@ -52,7 +52,6 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-slate-950">
-      {/* Header Info */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm">
@@ -71,7 +70,6 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({
           </div>
         </div>
 
-        {/* User Switcher */}
         <div className="flex items-center space-x-3 text-xs">
           <span className="text-slate-400">Говорить от имени:</span>
           <div className="flex space-x-1.5">
@@ -103,7 +101,6 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({
         </div>
       </div>
 
-      {/* Message Feed */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-slate-500 text-sm">
@@ -171,7 +168,6 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({
                   )}
                 </div>
 
-                {/* Status explanation */}
                 {!m.is_bot && (
                   <div className="mt-1 px-1 text-[10px] max-w-[80%]">
                     {m.error ? (
@@ -196,7 +192,6 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({
         <div ref={chatEndRef} />
       </div>
 
-      {/* Presets Bar */}
       <div className="bg-slate-900/60 border-t border-slate-800 px-6 py-2.5 flex items-center space-x-2 overflow-x-auto text-xs">
         <span className="text-slate-400 flex-shrink-0 font-semibold">Тестовые сценарии:</span>
         <div className="flex space-x-2">
@@ -212,7 +207,6 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({
         </div>
       </div>
 
-      {/* Input Form */}
       <form onSubmit={handleSend} className="p-4 bg-slate-900 border-t border-slate-800 flex space-x-3">
         <input
           type="text"

@@ -6,7 +6,7 @@ interface ContextViewProps {
   onRefresh: () => void;
 }
 
-export const ContextView: React.FC<ContextViewProps> = ({
+export const ContextView: React.FC<ContextViewProps> = React.memo(({
   contextMessages,
   onRefresh,
 }) => {
@@ -63,4 +63,4 @@ export const ContextView: React.FC<ContextViewProps> = ({
       </div>
     </div>
   );
-};
+});

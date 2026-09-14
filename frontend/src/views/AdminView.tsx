@@ -7,7 +7,7 @@ interface AdminViewProps {
   onForgetFact: (description: string) => Promise<number>;
 }
 
-export const AdminView: React.FC<AdminViewProps> = ({
+export const AdminView: React.FC<AdminViewProps> = React.memo(({
   stats,
   selectedChatId,
   onForgetFact,
@@ -190,4 +190,4 @@ export const AdminView: React.FC<AdminViewProps> = ({
       </div>
     </div>
   );
-};
+});

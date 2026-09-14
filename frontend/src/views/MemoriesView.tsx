@@ -7,7 +7,7 @@ interface MemoriesViewProps {
   onRefresh: () => void;
 }
 
-export const MemoriesView: React.FC<MemoriesViewProps> = ({
+export const MemoriesView: React.FC<MemoriesViewProps> = React.memo(({
   memories,
   onForgetFact,
   onRefresh,
@@ -131,4 +131,4 @@ export const MemoriesView: React.FC<MemoriesViewProps> = ({
       </div>
     </div>
   );
-};
+});

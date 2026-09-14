@@ -6,7 +6,7 @@ interface LogsViewProps {
   onRefresh: () => void;
 }
 
-export const LogsView: React.FC<LogsViewProps> = ({ logs, onRefresh }) => {
+export const LogsView: React.FC<LogsViewProps> = React.memo(({ logs, onRefresh }) => {
   return (
     <div className="flex flex-col h-full p-6 space-y-4 max-w-7xl mx-auto w-full">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -82,4 +82,4 @@ export const LogsView: React.FC<LogsViewProps> = ({ logs, onRefresh }) => {
       </div>
     </div>
   );
-};
+});

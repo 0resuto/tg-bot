@@ -15,7 +15,7 @@ interface OverviewViewProps {
   isRefreshingHealth: boolean;
 }
 
-export const OverviewView: React.FC<OverviewViewProps> = ({
+export const OverviewView: React.FC<OverviewViewProps> = React.memo(({
   stats,
   checklist,
   factsCount,
@@ -155,4 +155,4 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
       </div>
     </div>
   );
-};
+});

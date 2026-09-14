@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import json
-from datetime import datetime
-
-import redis.asyncio as redis
+from typing import TYPE_CHECKING
 
 from bot.domain.models import ChatMessage, MemoryFact, MemoryStats
 from bot.interfaces.memory import MemoryBackend
 from bot.log import get_logger
 from bot.services.sensitive_filter import SensitiveFilter
+
+if TYPE_CHECKING:
+    import redis.asyncio as redis
 
 logger = get_logger(__name__)
 
@@ -28,10 +28,7 @@ class MemoryService:
     ) -> None:
         self.memory = memory
         self.sensitive_filter = sensitive_filter
-        client = redis_client or redis
-        if client is None:
-            raise ValueError("Either redis_client or redis must be provided")
-        self.redis = client
+        self.redis = redis_client or redis
         self.cache_ttl = cache_ttl
         self.search_limit_quick = search_limit_quick
         self.search_limit_deep = search_limit_deep
@@ -75,47 +72,11 @@ class MemoryService:
             logger.error("Error during memory ingestion", exc_info=e, chat_id=chat_id)
 
     async def get_quick_facts(self, user_name: str, chat_id: int) -> list[MemoryFact]:
-        """Retrieve Level 1 quick facts with caching."""
-        cache_key = f"memory:quick:{chat_id}:{user_name}"
-        cached_data = await self.redis.get(cache_key)
-
-        if cached_data:
-            try:
-                facts_data = json.loads(cached_data)
-                return [
-                    MemoryFact(
-                        fact_text=f["fact_text"],
-                        subject_name=f.get("subject_name"),
-                        confidence=f.get("confidence", 1.0),
-                        created_at=datetime.fromisoformat(f["created_at"])
-                        if f.get("created_at")
-                        else None,
-                    )
-                    for f in facts_data
-                ]
-            except Exception as e:
-                logger.warning("Error parsing cached facts", exc_info=e, cache_key=cache_key)
-
-        # Cache miss, retrieve from memory backend
+        """Retrieve Level 1 quick facts directly from memory backend."""
         try:
-            facts = await self.memory.search_quick(
+            return await self.memory.search_quick(
                 user_name=user_name, group_id=str(chat_id), limit=self.search_limit_quick
             )
-
-            # Serialize for cache
-            facts_list = []
-            for f in facts:
-                facts_list.append(
-                    {
-                        "fact_text": f.fact_text,
-                        "subject_name": f.subject_name,
-                        "confidence": f.confidence,
-                        "created_at": f.created_at.isoformat() if f.created_at else None,
-                    }
-                )
-
-            await self.redis.set(cache_key, json.dumps(facts_list), ex=self.cache_ttl)
-            return facts
         except Exception as e:
             logger.error(
                 "Error retrieving quick facts", exc_info=e, user_name=user_name, chat_id=chat_id

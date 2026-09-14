@@ -71,8 +71,15 @@ async def test_get_quick_facts(memory_service):
     assert len(facts1) == 1
     assert facts1[0].fact_text == "likes coffee"
 
+    # Add a new fact to backend
+    from bot.domain.models import MemoryFact
+
+    memory_service.memory.facts.append(MemoryFact(fact_text="owns a cat", subject_name="Alice"))
+
+    # Immediately fetched without stale cache delay
     facts2 = await memory_service.get_quick_facts("Alice", 1)
-    assert len(facts2) == 1
+    assert len(facts2) == 2
+    assert {f.fact_text for f in facts2} == {"likes coffee", "owns a cat"}
 
 
 async def test_search_memories(memory_service):

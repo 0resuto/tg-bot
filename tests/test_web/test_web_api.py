@@ -49,7 +49,7 @@ class TestDashboardServer(AioHTTPTestCase):
 
         # Mock graph service
         self.graph_service = MagicMock()
-        self.graph_service.get_chat_graph = AsyncMock(
+        self.graph_service.get_graph = AsyncMock(
             return_value={
                 "nodes": [{"id": 1, "label": "User", "group": "User"}],
                 "edges": [],
@@ -59,7 +59,7 @@ class TestDashboardServer(AioHTTPTestCase):
 
         # Mock memory query service
         self.memory_query_service = MagicMock()
-        self.memory_query_service.get_memories_for_chat = AsyncMock(return_value=[])
+        self.memory_query_service.get_memories = AsyncMock(return_value=[])
         self.memory_query_service.forget_fact = AsyncMock(return_value=True)
         self.memory_query_service.get_stats = AsyncMock(
             return_value={"facts_count": 10, "entities_count": 5}
@@ -117,6 +117,21 @@ class TestDashboardServer(AioHTTPTestCase):
         data = await resp.json()
         assert "logs" in data
         assert isinstance(data["logs"], list)
+
+    async def test_get_graph_endpoint(self):
+        resp = await self.client.request("GET", "/api/graph?chat_id=123")
+        assert resp.status == 200
+        data = await resp.json()
+        assert "nodes" in data
+        assert "edges" in data
+        self.graph_service.get_graph.assert_awaited_once_with(123)
+
+    async def test_get_memories_endpoint(self):
+        resp = await self.client.request("GET", "/api/memories?chat_id=123")
+        assert resp.status == 200
+        data = await resp.json()
+        assert "facts" in data
+        self.memory_query_service.get_memories.assert_awaited_once_with(123)
 
 
 class TestSimulatorEnabledServer(AioHTTPTestCase):

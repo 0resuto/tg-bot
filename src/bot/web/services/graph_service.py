@@ -160,8 +160,9 @@ class GraphVisualizerService:
                 if chat_id is not None:
                     query = """
                         MATCH (n)
-                        WHERE n.group_id = $group_id OR n.group_id IS NULL
+                        WHERE n.group_id = $group_id
                         OPTIONAL MATCH (n)-[r]->(m)
+                        WHERE m.group_id = $group_id OR m IS NULL
                         RETURN n, r, m
                         LIMIT 300
                     """

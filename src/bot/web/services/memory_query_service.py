@@ -52,7 +52,7 @@ class MemoryQueryService:
                 if chat_id is not None:
                     query = """
                         MATCH (n)-[r]->(m)
-                        WHERE r.fact IS NOT NULL AND (r.group_id = $group_id OR r.group_id IS NULL)
+                        WHERE r.fact IS NOT NULL AND r.group_id = $group_id
                         RETURN coalesce(n.name, 'Fact') as subject, r.fact as fact, r.created_at as created_at
                         ORDER BY r.created_at DESC
                         LIMIT 100

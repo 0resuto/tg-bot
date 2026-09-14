@@ -64,6 +64,7 @@ All configuration is done via environment variables (`bot.config.Settings`).
 | `NEO4J_PASSWORD` | Neo4j password |
 | `ADMIN_USER_ID` | Telegram User ID of the bot admin |
 | `ADMIN_CHAT_ID` | Default chat ID for alerts/defaults |
+| `GROUP_CHAT_ID` | Telegram chat ID of the primary main group |
 | `BOT_LANGUAGE` | Language for LLM responses |
 
 ## 5. Persona Setup
@@ -89,17 +90,17 @@ You can configure the bot's identity and behavior by setting the persona configu
 
 ## 8. Admin Commands
 
-- `/memory_stats` - Display memory graph size and statistics.
-- `/forget_fact <fact_id>` - Remove a specific fact from the graph.
+- `/memory_stats` - Display memory graph size and statistics for the main group.
+- `/forget_fact <description>` - Remove facts matching description from the group knowledge graph.
 
 *(Commands require the user ID to match `ADMIN_USER_ID` in config).*
 
-## 9. Multi-Chat Support
+## 9. Fixed Dual-Chat Topology
 
-The bot is designed to handle multiple groups simultaneously.
-- Every chat is registered in the `chats` table.
-- Fact extraction and retrieval are scoped to `group_id` / `chat_id`.
-- Context buffers are separated by chat in Redis.
+The bot operates on a secure, fixed dual-chat topology:
+- **Main Group Chat (`GROUP_CHAT_ID`)**: Full read/write long-term memory cycle. Messages are buffered in Redis and debounced into the Neo4j Graphiti knowledge graph.
+- **Admin Private Chat (`ADMIN_USER_ID` / `ADMIN_CHAT_ID`)**: Read-only access to group long-term memory with an isolated short-term conversation context in Redis. Admin private messages are never ingested into long-term memory.
+- Messages from any other chat or group are rejected at the earliest filter level.
 
 ## 10. Backup
 

@@ -22,9 +22,12 @@ admin_private_router = Router(name="admin_private")
 
 
 def setup_admin_private_router(settings: Settings) -> None:
+    admin_ids = {uid for uid in (settings.admin_user_id, settings.admin_chat_id) if uid > 0}
+    if admin_private_router.message._handler.filters:
+        admin_private_router.message._handler.filters.clear()
     admin_private_router.message.filter(
         F.chat.type == "private",
-        IsAdminUser(settings.admin_user_id),
+        IsAdminUser(admin_ids),
     )
 
 
@@ -33,21 +36,17 @@ async def cmd_forget_fact(
     message: Message,
     command: CommandObject,
     memory_service: Any,
-    chat_repo: Any,
+    settings: Settings,
 ) -> None:
     description = command.args
     if not description:
         await message.reply("Usage: /forget_fact <description>")
         return
 
-    active_chats = await chat_repo.get_active_chat_ids()
-    group_chats = [cid for cid in active_chats if cid != message.chat.id]
-    if not group_chats:
-        await message.reply("No active group chats found.")
+    target_chat_id = settings.group_chat_id
+    if not target_chat_id:
+        await message.reply("GROUP_CHAT_ID is not configured.")
         return
-
-    neg_groups = [cid for cid in group_chats if cid < 0]
-    target_chat_id = neg_groups[0] if neg_groups else group_chats[0]
 
     try:
         deleted_count = await memory_service.forget_fact(description, chat_id=target_chat_id)
@@ -61,21 +60,17 @@ async def cmd_forget_fact(
 async def cmd_memory_stats(
     message: Message,
     memory_service: Any,
-    chat_repo: Any,
     member_repo: Any,
+    settings: Settings,
 ) -> None:
-    active_chats = await chat_repo.get_active_chat_ids()
-    group_chats = [cid for cid in active_chats if cid != message.chat.id]
-    if not group_chats:
-        await message.reply("No active group chats found.")
+    target_chat_id = settings.group_chat_id
+    if not target_chat_id:
+        await message.reply("GROUP_CHAT_ID is not configured.")
         return
-
-    neg_groups = [cid for cid in group_chats if cid < 0]
-    target_chat_id = neg_groups[0] if neg_groups else group_chats[0]
 
     try:
         mem_stats = await memory_service.get_stats(chat_id=target_chat_id)
-        members = await member_repo.get_members_by_chat(target_chat_id)
+        members = await member_repo.get_members_by_chat(target_chat_id) if member_repo else []
         tracked_count = len(members)
 
         last_ingestion_str = (
@@ -102,7 +97,6 @@ async def handle_admin_private_message(
     member_repo: Any,
     context_builder: Any,
     response_service: Any,
-    chat_repo: Any,
     settings: Settings,
 ) -> None:
     """Handle 1-on-1 private chat messages with the admin using shared group memory."""
@@ -117,7 +111,7 @@ async def handle_admin_private_message(
         last_name=message.from_user.last_name,
     )
 
-    # 1. Record incoming message in private context
+    # 1. Record incoming message in private context (never ingested into long-term memory)
     chat_msg = ChatMessage(
         chat_id=message.chat.id,
         user_id=message.from_user.id,
@@ -131,20 +125,10 @@ async def handle_admin_private_message(
     )
     await context_builder.add_message(msg=chat_msg)
 
-    # 2. Determine target group chats for shared memory access
-    active_chats = await chat_repo.get_active_chat_ids()
-    group_chats = [cid for cid in active_chats if cid != message.chat.id]
-
-    memory_chat_ids = [message.chat.id]
-    target_group_id = None
-    if group_chats:
-        neg_groups = [cid for cid in group_chats if cid < 0]
-        target_group_id = neg_groups[0] if neg_groups else group_chats[0]
-        memory_chat_ids.append(target_group_id)
-
-    # 3. Collect active user names for quick facts (admin + any group member mentioned)
+    # 2. Collect active user names for quick facts (admin + any group member mentioned)
     active_user_names = [identity.display_name]
-    if target_group_id:
+    target_group_id = settings.group_chat_id
+    if target_group_id and member_repo:
         try:
             members = await member_repo.get_members_by_chat(target_group_id)
             for m in members:
@@ -160,26 +144,27 @@ async def handle_admin_private_message(
         except Exception as e:
             logger.debug("Failed to retrieve group members for private context", error=str(e))
 
-    # 4. Generate response with shared memory access
+    # 3. Generate response with read-only access to group long-term memory
     bot_id = message.bot.id if message.bot else 0
     response = await response_service.generate_response(
         chat_id=message.chat.id,
         user_display_name=identity.display_name,
         active_user_names=active_user_names,
         bot_id=bot_id,
-        memory_chat_ids=memory_chat_ids,
     )
 
     if response:
         sent_message = await message.reply(response)
         # Store bot response in private context
         bot_name = settings.bot_name_list[0] if settings.bot_name_list else "Bot"
+        msg_date = getattr(sent_message, "date", None) or message.date
+        msg_id = getattr(sent_message, "message_id", 0)
         bot_chat_msg = ChatMessage(
             chat_id=message.chat.id,
             user_id=message.bot.id if message.bot else 0,
             text=response,
-            timestamp=sent_message.date,
-            message_id=sent_message.message_id,
+            timestamp=msg_date,
+            message_id=msg_id,
             display_name=bot_name,
             reply_to_message_id=message.message_id,
         )

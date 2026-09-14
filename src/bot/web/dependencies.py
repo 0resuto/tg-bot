@@ -103,7 +103,6 @@ class WebContainer:
             self.llm_provider = OpenAILLMProvider(
                 api_key=self.settings.openai_api_key,
                 default_model=self.settings.openai_response_model,
-                default_chat_id=self.settings.admin_chat_id or 0,
                 timeout=self.settings.openai_timeout_seconds,
             )
 
@@ -186,7 +185,7 @@ class WebContainer:
                 )
 
         self.admin_notifier = AdminNotifier(
-            admin_chat_id=self.settings.admin_chat_id,
+            admin_chat_id=self.settings.admin_chat_id or self.settings.admin_user_id,
             bot=self.bot,
         )
 
@@ -198,6 +197,7 @@ class WebContainer:
                 persona_prompt=self.settings.get_persona_prompt(),
                 response_model=self.settings.openai_response_model,
                 admin_notifier=self.admin_notifier,
+                group_chat_id=self.settings.group_chat_id,
             )
 
         # Simulator Service (if enabled)

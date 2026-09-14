@@ -19,7 +19,7 @@ from bot.infrastructure.memory.graphiti_backend import GraphitiMemoryBackend
 from bot.infrastructure.redis.client import create_redis_client
 from bot.infrastructure.tasks import AsyncioTaskRunner
 from bot.log import get_logger, setup_logging
-from bot.repositories import ChatRepository, MemberRepository
+from bot.repositories import MemberRepository
 from bot.services.admin_notifier import AdminNotifier
 from bot.services.context_builder import ContextBuilder
 from bot.services.debouncer import MessageDebouncer
@@ -64,7 +64,7 @@ async def main() -> None:
     # 3. Create infrastructure
     # Run migrations in an executor
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, run_migrations, settings)
+    await loop.run_in_executor(None, run_migrations)
 
     engine = create_async_engine_instance(settings.postgres_dsn)
     session_factory = create_session_factory(engine)
@@ -83,14 +83,12 @@ async def main() -> None:
     llm_provider = OpenAILLMProvider(
         api_key=settings.openai_api_key,
         default_model=settings.openai_response_model,
-        default_chat_id=settings.admin_chat_id or 0,
         timeout=settings.openai_timeout_seconds,
     )
 
     task_runner = AsyncioTaskRunner()
 
     # 4. Create repositories
-    chat_repo = ChatRepository(session_factory)
     member_repo = MemberRepository(session_factory)
 
     # 5. Create services
@@ -112,7 +110,7 @@ async def main() -> None:
         ttl_seconds=settings.context_ttl_seconds,
     )
 
-    admin_notifier = AdminNotifier(admin_chat_id=settings.admin_chat_id)
+    admin_notifier = AdminNotifier(admin_chat_id=settings.admin_chat_id or settings.admin_user_id)
 
     response_service = ResponseService(
         llm=llm_provider,
@@ -121,6 +119,7 @@ async def main() -> None:
         persona_prompt=settings.get_persona_prompt(),
         response_model=settings.openai_response_model,
         admin_notifier=admin_notifier,
+        group_chat_id=settings.group_chat_id,
     )
 
     # Note: MentionDetector needs bot info, which we will fetch in the startup hook.
@@ -143,7 +142,6 @@ async def main() -> None:
         "response_service": response_service,
         "context_builder": context_builder,
         "debouncer": debouncer,
-        "chat_repo": chat_repo,
         "member_repo": member_repo,
         "task_runner": task_runner,
         "admin_notifier": admin_notifier,
@@ -170,16 +168,20 @@ async def main() -> None:
             bot_username=cast(str, bot_user.username),
         )
         services["mention_detector"] = mention_detector
-        # Load active chat IDs for allowlist
-        active_chats = await chat_repo.get_active_chat_ids()
-        allowed = set(active_chats)
-        if settings.admin_chat_id:
-            allowed.add(settings.admin_chat_id)
-        if settings.admin_user_id:
-            allowed.add(settings.admin_user_id)
-        if "allowlist" in dp:
-            dp["allowlist"].update_allowed_chats(allowed)
-        logger.info("Startup complete", allowed_chats=allowed)
+        if not settings.group_chat_id:
+            logger.warning(
+                "GROUP_CHAT_ID is not configured or 0; group messages will not be processed"
+            )
+        if not settings.admin_user_id and not settings.admin_chat_id:
+            logger.warning(
+                "ADMIN_USER_ID / ADMIN_CHAT_ID is not configured; admin private messages will not be processed"
+            )
+        logger.info(
+            "Startup complete",
+            group_chat_id=settings.group_chat_id,
+            admin_user_id=settings.admin_user_id,
+            admin_chat_id=settings.admin_chat_id,
+        )
 
     @dp.shutdown()
     async def on_shutdown(bot: Bot) -> None:
@@ -194,9 +196,7 @@ async def main() -> None:
 
     # 8. Start polling
     try:
-        await dp.start_polling(
-            bot, allowed_updates=["message", "edited_message", "callback_query", "my_chat_member"]
-        )
+        await dp.start_polling(bot, allowed_updates=["message"])
     except (KeyboardInterrupt, SystemExit):
         logger.info("Bot stopped by user.")
     except Exception:

@@ -44,6 +44,10 @@ class OpenAILLMProvider(LLMProvider):
         ),
         reraise=True,
     )
+    async def _call_api(self, **kwargs: Any) -> Any:
+        """Execute a single OpenAI API call with retry protection."""
+        return await self.client.chat.completions.create(**kwargs)
+
     async def generate_response(
         self,
         system_prompt: str,
@@ -74,7 +78,7 @@ class OpenAILLMProvider(LLMProvider):
                 kwargs["temperature"] = temperature
 
         try:
-            response = await self.client.chat.completions.create(**kwargs)
+            response = await self._call_api(**kwargs)
         except openai.BadRequestError as err:
             err_msg = str(err)
             if "max_tokens" in err_msg and "max_completion_tokens" in err_msg:
@@ -82,12 +86,12 @@ class OpenAILLMProvider(LLMProvider):
                 kwargs["max_completion_tokens"] = max_tokens
                 if "temperature" in err_msg:
                     kwargs.pop("temperature", None)
-                response = await self.client.chat.completions.create(**kwargs)
+                response = await self._call_api(**kwargs)
             elif "temperature" in err_msg and (
                 "unsupported" in err_msg.lower() or "does not support" in err_msg.lower()
             ):
                 kwargs.pop("temperature", None)
-                response = await self.client.chat.completions.create(**kwargs)
+                response = await self._call_api(**kwargs)
             else:
                 raise
 

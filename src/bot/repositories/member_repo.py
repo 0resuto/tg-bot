@@ -27,7 +27,9 @@ class MemberRepository:
                 .values(chat_id=chat_id, title=chat_title)
                 .on_conflict_do_update(
                     index_elements=[ChatORM.chat_id],
-                    set_={"title": chat_title} if chat_title is not None else {"is_active": True},
+                    set_={"is_active": True, "title": chat_title}
+                    if chat_title is not None
+                    else {"is_active": True},
                 )
             )
             await session.execute(chat_stmt)

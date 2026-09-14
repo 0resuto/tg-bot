@@ -42,7 +42,7 @@ async def test_generate_response(response_service):
     assert "You are a bot" in response_service.llm.calls[0]["system_prompt"]
 
 
-async def test_generate_response_with_memory_chat_ids():
+async def test_generate_response_dual_chat_long_term_memory():
     from bot.domain.models import MemoryFact
 
     llm = MockLLMProvider()
@@ -63,8 +63,11 @@ async def test_generate_response_with_memory_chat_ids():
                 return [MemoryFact(fact_text="Alice bought a bike in Rome")]
             return []
 
+    context_requested_chats = []
+
     class MockContextWithMessages:
         async def get_context(self, chat_id: int):
+            context_requested_chats.append(chat_id)
             return [
                 ChatMessage(
                     chat_id=chat_id,
@@ -82,27 +85,62 @@ async def test_generate_response_with_memory_chat_ids():
         context_builder=MockContextWithMessages(),
         persona_prompt="You are Ista.",
         response_model="test-model",
+        group_chat_id=-100,
     )
 
     res = await svc.generate_response(
         chat_id=10,
         user_display_name="Admin",
         active_user_names=["Admin", "Alice"],
-        memory_chat_ids=[10, -100],
     )
     assert res == "Mock response"
     assert len(llm.calls) == 1
     system_prompt = llm.calls[0]["system_prompt"]
 
-    # Both chats were queried
-    assert 10 in [c for _, c in queried_quick_chats]
-    assert -100 in [c for _, c in queried_quick_chats]
-    assert 10 in queried_deep_chats
-    assert -100 in queried_deep_chats
+    # Short term context requested for admin private chat 10
+    assert context_requested_chats == [10]
+
+    # Long term memory queries directly targeted group chat -100
+    assert all(c == -100 for _, c in queried_quick_chats)
+    assert queried_deep_chats == [-100]
 
     # Group facts were included in system prompt
     assert "Alice likes coffee" in system_prompt
     assert "Alice bought a bike in Rome" in system_prompt
+
+
+async def test_generate_response_preserves_distinct_group_memory_target():
+    """Verify distinct group chat (like simulator) targets its own memory even when group_chat_id is set."""
+    llm = MockLLMProvider()
+    queried_quick_chats = []
+
+    class MockMem:
+        async def get_quick_facts(self, user_name: str, chat_id: int):
+            queried_quick_chats.append((user_name, chat_id))
+            return []
+
+        async def search_memories(self, query: str, chat_id: int):
+            return []
+
+    svc = ResponseService(
+        llm=llm,
+        memory_service=MockMem(),
+        context_builder=MockContextBuilder(),
+        persona_prompt="You are Ista.",
+        response_model="test-model",
+        group_chat_id=-100,  # Production group chat ID
+    )
+
+    # Simulated sandbox chat ID
+    simulator_chat_id = -1001987654321
+    res = await svc.generate_response(
+        chat_id=simulator_chat_id,
+        user_display_name="Tester",
+        active_user_names=["Tester"],
+    )
+    assert res == "Mock response"
+    # Query must target simulator_chat_id, not production -100
+    assert queried_quick_chats == [("Tester", simulator_chat_id)]
 
 
 async def test_generate_response_error_notifies_admin():

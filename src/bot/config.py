@@ -29,8 +29,9 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     admin_user_id: int = 0
     admin_chat_id: int = 0
+    group_chat_id: int = 0
 
-    @field_validator("admin_user_id", "admin_chat_id", mode="before")
+    @field_validator("admin_user_id", "admin_chat_id", "group_chat_id", mode="before")
     @classmethod
     def _parse_id(cls, v: object) -> int:
         if isinstance(v, str):

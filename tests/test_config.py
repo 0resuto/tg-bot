@@ -11,6 +11,7 @@ def test_settings_parsing():
         "TELEGRAM_BOT_TOKEN": "123:ABC",
         "ADMIN_USER_ID": "111",
         "ADMIN_CHAT_ID": "222",
+        "GROUP_CHAT_ID": "-100999888",
         "BOT_NAMES": "Ista, Иста, Bot",
         "OPENAI_API_KEY": "sk-mock",
         "POSTGRES_PASSWORD": "secret_pass",
@@ -22,6 +23,7 @@ def test_settings_parsing():
         assert settings.telegram_bot_token == "123:ABC"
         assert settings.admin_user_id == 111
         assert settings.admin_chat_id == 222
+        assert settings.group_chat_id == -100999888
         assert settings.bot_name_list == ["Ista", "Иста", "Bot"]
         assert settings.sensitive_category_list == ["health", "finance", "credentials"]
         assert "postgresql+asyncpg://" in settings.postgres_dsn

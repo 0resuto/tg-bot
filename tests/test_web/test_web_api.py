@@ -60,7 +60,7 @@ class TestDashboardServer(AioHTTPTestCase):
         # Mock memory query service
         self.memory_query_service = MagicMock()
         self.memory_query_service.get_memories = AsyncMock(return_value=[])
-        self.memory_query_service.forget_fact = AsyncMock(return_value=True)
+        self.memory_query_service.forget_fact = AsyncMock(return_value=1)
         self.memory_query_service.get_stats = AsyncMock(
             return_value={"facts_count": 10, "entities_count": 5}
         )
@@ -132,6 +132,17 @@ class TestDashboardServer(AioHTTPTestCase):
         data = await resp.json()
         assert "facts" in data
         self.memory_query_service.get_memories.assert_awaited_once_with(123)
+
+    async def test_post_forget_endpoint(self):
+        resp = await self.client.request(
+            "POST",
+            "/api/forget",
+            json={"description": "coffee", "chat_id": 123},
+        )
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["deleted_count"] == 1
+        self.memory_query_service.forget_fact.assert_awaited_once_with("coffee", 123)
 
 
 class TestSimulatorEnabledServer(AioHTTPTestCase):

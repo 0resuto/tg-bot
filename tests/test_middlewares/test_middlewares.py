@@ -1,65 +1,10 @@
 from __future__ import annotations
 
-from bot.telegram.middlewares.allowlist import ChatAllowlistMiddleware
 from bot.telegram.middlewares.services import ServicesMiddleware
-
-
-class MockChat:
-    def __init__(self, chat_id: int):
-        self.id = chat_id
 
 
 class MockUpdate:
     pass
-
-
-async def test_allowlist_middleware_allowed():
-    middleware = ChatAllowlistMiddleware(allowed_chat_ids={123, 456})
-
-    called = False
-
-    async def dummy_handler(event, data):
-        nonlocal called
-        called = True
-        return "ok"
-
-    data = {"event_chat": MockChat(123)}
-    result = await middleware(dummy_handler, MockUpdate(), data)
-    assert called is True
-    assert result == "ok"
-
-
-async def test_allowlist_middleware_denied():
-    middleware = ChatAllowlistMiddleware(allowed_chat_ids={123})
-
-    called = False
-
-    async def dummy_handler(event, data):
-        nonlocal called
-        called = True
-        return "ok"
-
-    data = {"event_chat": MockChat(999)}
-    result = await middleware(dummy_handler, MockUpdate(), data)
-    assert called is False
-    assert result is None
-
-
-async def test_allowlist_update():
-    middleware = ChatAllowlistMiddleware(allowed_chat_ids={123})
-    middleware.update_allowed_chats({123, 999})
-
-    called = False
-
-    async def dummy_handler(event, data):
-        nonlocal called
-        called = True
-        return "ok"
-
-    data = {"event_chat": MockChat(999)}
-    result = await middleware(dummy_handler, MockUpdate(), data)
-    assert called is True
-    assert result == "ok"
 
 
 async def test_services_middleware():

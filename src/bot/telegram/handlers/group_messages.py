@@ -10,8 +10,10 @@ from aiogram import F, Router
 from aiogram.enums import ChatType as EnumChatType
 from aiogram.types import Message
 
+from bot.config import Settings
 from bot.domain.models import ChatMessage, MemberIdentity
 from bot.log import get_logger
+from bot.telegram.filters.admin import IsGroupChat
 from bot.telegram.media import extract_message_content
 
 logger = get_logger(__name__)
@@ -19,9 +21,16 @@ logger = get_logger(__name__)
 group_messages_router = Router(name="group_messages")
 
 
-@group_messages_router.message(
-    F.chat.type.in_({EnumChatType.GROUP, EnumChatType.SUPERGROUP}),
-)
+def setup_group_messages_router(settings: Settings) -> None:
+    if group_messages_router.message._handler.filters:
+        group_messages_router.message._handler.filters.clear()
+    group_messages_router.message.filter(
+        F.chat.type.in_({EnumChatType.GROUP, EnumChatType.SUPERGROUP}),
+        IsGroupChat(settings.group_chat_id),
+    )
+
+
+@group_messages_router.message()
 async def handle_group_message(
     message: Message,
     member_repo: Any,
@@ -82,13 +91,22 @@ async def handle_group_message(
         )
         if response:
             sent_msg = await message.reply(response)
+            bot_date = getattr(sent_msg, "date", None) or message.date
+            bot_msg_id = getattr(sent_msg, "message_id", 0)
+            bot_from_user = getattr(sent_msg, "from_user", None)
+            bot_user_id = (
+                bot_from_user.id if bot_from_user else (message.bot.id if message.bot else 0)
+            )
+            bot_name = (
+                bot_from_user.first_name if bot_from_user and bot_from_user.first_name else "Bot"
+            )
             bot_msg = ChatMessage(
                 chat_id=message.chat.id,
-                user_id=sent_msg.from_user.id if sent_msg.from_user else 0,
-                text=sent_msg.text or response,
-                timestamp=sent_msg.date,
-                message_id=sent_msg.message_id,
-                display_name=sent_msg.from_user.first_name if sent_msg.from_user else "Bot",
+                user_id=bot_user_id,
+                text=getattr(sent_msg, "text", None) or response,
+                timestamp=bot_date,
+                message_id=bot_msg_id,
+                display_name=bot_name,
                 reply_to_message_id=message.message_id,
             )
             await context_builder.add_message(msg=bot_msg)

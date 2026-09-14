@@ -109,11 +109,13 @@ class MessageDebouncer:
             timer.cancel()
         self._timers.clear()
 
-        # Collect all remaining keys
+        # First, wait for any in-flight ingestion tasks to complete
+        # so that self._processing is empty and _flush() won't skip any keys.
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+
+        # Now flush all remaining buffered messages — no keys are blocked.
         pending_keys = [k for k, msgs in self._buffers.items() if msgs]
         if pending_keys:
             tasks = [self._flush(chat_id, user_id) for chat_id, user_id in pending_keys]
             await asyncio.gather(*tasks, return_exceptions=True)
-
-        if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=True)

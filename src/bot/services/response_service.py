@@ -26,6 +26,7 @@ class ResponseService:
         persona_prompt: str,
         response_model: str,
         admin_notifier: AdminNotifier | None = None,
+        group_chat_id: int = 0,
     ) -> None:
         self.llm = llm
         self.memory_service = memory_service
@@ -33,6 +34,7 @@ class ResponseService:
         self.persona_prompt = persona_prompt
         self.response_model = response_model
         self.admin_notifier = admin_notifier
+        self.group_chat_id = group_chat_id
 
     async def generate_response(
         self,
@@ -41,43 +43,35 @@ class ResponseService:
         active_user_names: list[str],
         *,
         bot_id: int = 0,
-        memory_chat_ids: list[int] | None = None,
         raise_on_error: bool = False,
     ) -> str:
         """Generate a response using conversational context and memory."""
-        effective_memory_chat_ids = memory_chat_ids if memory_chat_ids else [chat_id]
-
-        # 1. Get conversation context
+        # 1. Get conversation context from current chat's short-term buffer
         context = await self.context_builder.get_context(chat_id)
 
-        # 2. Get Level 1 quick facts for all active users across effective memory chats
+        # Target chat for long-term memory: always the main group chat (unless explicitly in a separate group like simulator)
+        if chat_id < 0 and self.group_chat_id != 0 and chat_id != self.group_chat_id:
+            memory_chat_id = chat_id
+        else:
+            memory_chat_id = self.group_chat_id or chat_id
+
+        # 2. Get Level 1 quick facts for active users from main group memory
         quick_facts: dict[str, list[MemoryFact]] = {}
         for name in active_user_names:
-            all_name_facts: list[MemoryFact] = []
-            seen_texts: set[str] = set()
-            for m_chat_id in effective_memory_chat_ids:
-                facts = await self.memory_service.get_quick_facts(user_name=name, chat_id=m_chat_id)
-                for f in facts:
-                    if f.fact_text not in seen_texts:
-                        seen_texts.add(f.fact_text)
-                        all_name_facts.append(f)
-            if all_name_facts:
-                quick_facts[name] = all_name_facts
+            facts = await self.memory_service.get_quick_facts(
+                user_name=name, chat_id=memory_chat_id
+            )
+            if facts:
+                quick_facts[name] = facts
 
-        # 3. Get Level 2 deep search using recent conversation as query across effective memory chats
+        # 3. Get Level 2 deep search using recent conversation as query against main group memory
         query_lines = [f"{msg.display_name}: {msg.text}" for msg in context[-5:]] if context else []
         query_text = "\n".join(query_lines)
         deep_facts: list[MemoryFact] = []
         if query_text:
-            seen_deep_texts: set[str] = set()
-            for m_chat_id in effective_memory_chat_ids:
-                facts = await self.memory_service.search_memories(
-                    query=query_text, chat_id=m_chat_id
-                )
-                for f in facts:
-                    if f.fact_text not in seen_deep_texts:
-                        seen_deep_texts.add(f.fact_text)
-                        deep_facts.append(f)
+            deep_facts = await self.memory_service.search_memories(
+                query=query_text, chat_id=memory_chat_id
+            )
 
         # 4. Build system prompt
         system_prompt = self._build_system_prompt(quick_facts, deep_facts)

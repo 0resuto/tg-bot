@@ -13,11 +13,12 @@ WORKDIR /app
 RUN pip install uv
 
 # Copy project files for dependency installation
-COPY pyproject.toml uv.lock* ./
+COPY README.md pyproject.toml uv.lock* ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-# Copy source code and sync again to include it
+# Copy source code and tools, then sync again to include them
 COPY src/ src/
+COPY tools/ tools/
 RUN uv sync --frozen --no-dev
 
 FROM python:3.12-slim
@@ -27,17 +28,18 @@ WORKDIR /app
 # Create a non-root user
 RUN groupadd -r botuser && useradd -r -g botuser botuser
 
-# Copy virtual environment and source code from builder
+# Copy virtual environment, source code, and tools from builder
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
+COPY --from=builder /app/tools /app/tools
 COPY --from=frontend-builder /frontend/dist frontend/dist
 COPY alembic.ini .
 COPY alembic/ alembic/
 COPY prompts/ prompts/
 
-# Ensure the virtual environment is in PATH and src is in PYTHONPATH
+# Ensure the virtual environment is in PATH and src/root are in PYTHONPATH
 ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app/src"
+ENV PYTHONPATH="/app/src:/app"
 
 # Run as non-root user
 USER botuser

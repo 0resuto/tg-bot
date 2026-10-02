@@ -16,6 +16,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
 
+_SUPPORTED_PROXY_SCHEMES = frozenset({"http", "socks4", "socks5"})
+
 
 class Settings(BaseSettings):
     """Root settings loaded from environment variables / ``.env`` file."""
@@ -31,6 +33,13 @@ class Settings(BaseSettings):
 
     # -- Telegram ----------------------------------------------------------
     telegram_bot_token: str = ""
+    telegram_proxy_url: str = Field(
+        default="",
+        description=(
+            "Optional proxy for Telegram API calls, e.g. http://user:pass@host:3128, "
+            "socks5://host:1080. Empty means a direct connection."
+        ),
+    )
     admin_user_id: int = 0
     admin_chat_id: int = 0
     group_chat_id: int = 0
@@ -133,6 +142,18 @@ class Settings(BaseSettings):
 
     def validate_for_bot_runtime(self) -> None:
         """Validate required secrets before starting the Telegram polling bot."""
+        proxy = self.telegram_proxy_url.strip()
+        if proxy:
+            scheme = proxy.split("://", 1)[0].lower()
+            if scheme not in _SUPPORTED_PROXY_SCHEMES:
+                raise ValueError(
+                    "\n=================================================================\n"
+                    "[FATAL CONFIGURATION ERROR] Telegram Bot cannot start!\n"
+                    f"TELEGRAM_PROXY_URL has an unsupported scheme: {scheme!r}\n"
+                    "Supported schemes: http://, socks4://, socks5://\n"
+                    "=================================================================\n"
+                )
+
         missing: list[str] = []
         token = self.telegram_bot_token.strip()
         if not token or token.startswith("YOUR_"):

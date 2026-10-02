@@ -205,6 +205,7 @@ Variables are loaded from `.env`:
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `TELEGRAM_BOT_TOKEN` | *required* | Telegram bot token from @BotFather |
+| `TELEGRAM_PROXY_URL` | *(empty)* | Optional proxy for Telegram API calls, e.g. `socks5://host:1080` or `http://user:pass@host:3128`. Empty = direct connection |
 | `GROUP_CHAT_ID` | `0` | Primary group chat ID where episodic memory is collected |
 | `ADMIN_USER_ID` | `0` | Telegram user ID authorized for private admin queries |
 | `ADMIN_CHAT_ID` | `0` | Optional chat ID for error alerts and notifications |
@@ -230,6 +231,27 @@ Variables are loaded from `.env`:
 | `WEB_PORT` | `8080` | Dashboard web port |
 | `WEB_ENABLE_SIMULATOR` | `false` | Enable chat sandbox endpoint in dashboard |
 | `DEBUG` | `false` | Enable verbose debug logging |
+
+### Telegram Proxy (Optional)
+
+aiogram does not read `HTTP_PROXY`/`HTTPS_PROXY`, so Telegram API traffic is
+routed through `TELEGRAM_PROXY_URL` when it is set. Supported schemes are
+`http://`, `socks4://` and `socks5://`, optionally with credentials included in
+the URL. Leave the variable empty for a direct connection — nothing else needs
+to be configured.
+
+```bash
+# .env
+TELEGRAM_PROXY_URL=socks5://127.0.0.1:1080
+```
+
+Notes:
+- OpenAI/Graphiti calls go through `httpx`, which honors `HTTP_PROXY`/`HTTPS_PROXY`
+  automatically. Set those separately if LLM traffic also needs a proxy.
+- In Docker, `127.0.0.1` inside the `bot` container refers to the container itself.
+  Point the proxy at an address reachable from the `botnet` network, e.g. a proxy
+  container joined to `botnet`, or the host with the proxy listening on `0.0.0.0`
+  plus a firewall rule for the Docker subnet.
 
 ---
 

@@ -9,6 +9,7 @@ from typing import cast
 
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 
 from bot.config import Settings
 from bot.db import (
@@ -30,6 +31,20 @@ from bot.services.response_service import ResponseService
 from bot.telegram.dispatcher import create_dispatcher
 
 logger = get_logger(__name__)
+
+
+def build_bot_session(proxy_url: str) -> AiohttpSession | None:
+    """Build an aiogram HTTP session, optionally routed through a proxy.
+
+    aiogram ignores the standard ``HTTP_PROXY``/``HTTPS_PROXY`` environment
+    variables, so the proxy must be passed explicitly. Returns ``None`` for a
+    direct connection.
+    """
+    proxy = proxy_url.strip()
+    if not proxy:
+        return None
+    logger.info("Telegram API calls will use proxy")
+    return AiohttpSession(proxy=proxy)
 
 
 async def main() -> None:
@@ -124,7 +139,11 @@ async def main() -> None:
     }
 
     # 6. Create bot and dispatcher
-    bot = Bot(token=settings.telegram_bot_token, default=DefaultBotProperties(parse_mode="HTML"))
+    bot = Bot(
+        token=settings.telegram_bot_token,
+        default=DefaultBotProperties(parse_mode="HTML"),
+        session=build_bot_session(settings.telegram_proxy_url),
+    )
     admin_notifier.set_bot(bot)
     dp = create_dispatcher(settings, services, redis_client)
 

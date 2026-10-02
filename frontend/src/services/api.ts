@@ -2,6 +2,8 @@ import {
   ChatInfo,
   ContextMessage,
   GraphResponse,
+  ImportPreviewResponse,
+  ImportStatusResponse,
   LogEvent,
   MemoryFact,
   PresetUser,
@@ -82,6 +84,44 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+    return res.json();
+  },
+  async previewImport(payload: {
+    data: unknown;
+    chat_id?: number | null;
+    gap_minutes?: number;
+    max_messages?: number;
+    min_length?: number | null;
+  }): Promise<ImportPreviewResponse> {
+    const res = await request('/api/import/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return res.json();
+  },
+  async startImport(payload: {
+    data: unknown;
+    chat_id?: number | null;
+    gap_minutes?: number;
+    max_messages?: number;
+    delay?: number;
+    no_db?: boolean;
+    min_length?: number | null;
+  }): Promise<ImportStatusResponse> {
+    const res = await request('/api/import/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return res.json();
+  },
+  async getImportStatus(): Promise<ImportStatusResponse> {
+    const res = await request('/api/import/status');
+    return res.json();
+  },
+  async cancelImport(): Promise<{ cancelled: boolean; message: string }> {
+    const res = await request('/api/import/cancel', { method: 'POST' });
     return res.json();
   },
 };

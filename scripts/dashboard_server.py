@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 
-from bot.api.server import run_web_server
-from bot.config import WebConfig
+# Ensure repository root is on sys.path when running from scripts/
+repo_root = Path(__file__).resolve().parent.parent
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+from bot.api.server import run_web_server  # noqa: E402
+from bot.config import WebConfig  # noqa: E402
 
 
 def main() -> None:

@@ -16,7 +16,8 @@ export const Header: React.FC<HeaderProps> = ({
   isRefreshing,
   pollingError,
 }) => {
-  const isOk = stats?.all_ready ?? true;
+  const isOk = !pollingError && Boolean(stats?.all_ready);
+
   return (
     <header className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shadow-sm z-20">
       <div className="flex items-center space-x-3">
@@ -36,29 +37,34 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center space-x-3 text-xs">
         {pollingError && (
           <div
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-yellow-950/60 border border-yellow-700 text-yellow-300"
-            title={pollingError}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-amber-950/80 border border-amber-700 text-amber-300 cursor-pointer hover:bg-amber-900/80 transition"
+            title={`Connection error: ${pollingError}. Click to retry.`}
+            onClick={onRefresh}
           >
-            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse" />
-            <span className="font-medium">Offline</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+            <span className="font-medium">Backend Offline</span>
           </div>
         )}
         <div className="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700">
           <span
             className={`w-2.5 h-2.5 rounded-full ${
-              botStatus === 'calling_llm'
-                ? 'bg-yellow-400 animate-ping'
-                : botStatus === 'error'
-                  ? 'bg-red-500'
-                  : 'bg-emerald-400'
+              pollingError
+                ? 'bg-slate-500'
+                : botStatus === 'calling_llm'
+                  ? 'bg-yellow-400 animate-ping'
+                  : botStatus === 'error'
+                    ? 'bg-red-500'
+                    : 'bg-emerald-400'
             }`}
           />
           <span className="text-slate-200 font-medium">
-            {botStatus === 'calling_llm'
-              ? '🟡 Generating...'
-              : botStatus === 'error'
-                ? '🔴 Error'
-                : '🟢 Ready'}
+            {pollingError
+              ? '⚪ Disconnected'
+              : botStatus === 'calling_llm'
+                ? '🟡 Generating...'
+                : botStatus === 'error'
+                  ? '🔴 Error'
+                  : '🟢 Ready'}
           </span>
         </div>
         <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700">
@@ -70,16 +76,30 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onRefresh}
           disabled={isRefreshing}
-          title="Check all services health status"
+          title={
+            pollingError
+              ? `Backend is unreachable: ${pollingError}`
+              : isOk
+                ? 'All background services are healthy'
+                : 'One or more background services are degraded'
+          }
           className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full border transition cursor-pointer disabled:opacity-50 ${
-            isOk
-              ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300 hover:bg-emerald-900/80'
-              : 'bg-red-950/60 border-red-800 text-red-300 hover:bg-red-900/80'
+            pollingError
+              ? 'bg-amber-950/60 border-amber-800 text-amber-300 hover:bg-amber-900/80'
+              : isOk
+                ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300 hover:bg-emerald-900/80'
+                : 'bg-red-950/60 border-red-800 text-red-300 hover:bg-red-900/80'
           }`}
         >
-          <span>{isRefreshing ? '⏳' : isOk ? '✅' : '❌'}</span>
+          <span>{isRefreshing ? '⏳' : pollingError ? '⚠️' : isOk ? '✅' : '❌'}</span>
           <span className="font-medium">
-            {isRefreshing ? 'Checking...' : isOk ? 'Services Healthy' : 'Service Degradation'}
+            {isRefreshing
+              ? 'Checking...'
+              : pollingError
+                ? 'Backend Unreachable'
+                : isOk
+                  ? 'Services Healthy'
+                  : 'Service Degradation'}
           </span>
         </button>
       </div>

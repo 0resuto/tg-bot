@@ -9,6 +9,7 @@ import redis.asyncio as aioredis
 from fastapi import Request
 from neo4j import AsyncDriver, AsyncGraphDatabase
 
+from bot.api.services.chat_import_service import ChatImportService
 from bot.api.services.graph_service import GraphVisualizerService
 from bot.api.services.health_service import SystemHealthService
 from bot.api.services.memory_query_service import MemoryQueryService
@@ -62,6 +63,7 @@ class WebContainer:
     graph_service: GraphVisualizerService
     memory_query_service: MemoryQueryService | None = None
     simulator_service: ChatSimulatorService | None = None
+    chat_import_service: ChatImportService
     admin_notifier: AdminNotifier | None = None
     bot: Any | None = None
 
@@ -93,6 +95,7 @@ class WebContainer:
         self.graph_service = GraphVisualizerService(self.settings)
         self.memory_query_service = None
         self.simulator_service = None
+        self.chat_import_service = ChatImportService(self.settings, self)
         self.admin_notifier = None
         self.bot = None
 

@@ -33,6 +33,28 @@ class SimulateMessageRequest(BaseModel):
     reply_to_bot: bool = False
 
 
+class ImportPreviewRequest(BaseModel):
+    """Payload for dry-run preview of chat export data."""
+
+    data: dict[str, Any]
+    chat_id: int | None = None
+    gap_minutes: int = 20
+    max_messages: int = 15
+    min_length: int | None = None
+
+
+class StartImportRequest(BaseModel):
+    """Payload for initiating background chat export ingestion."""
+
+    data: dict[str, Any]
+    chat_id: int | None = None
+    gap_minutes: int = 20
+    max_messages: int = 15
+    delay: float = 0.5
+    no_db: bool = False
+    min_length: int | None = None
+
+
 # --------------------------------------------------------------------------
 # Health & Diagnostics
 # --------------------------------------------------------------------------
@@ -269,3 +291,64 @@ async def handle_send_message(
             status_code=500,
             content={"success": False, "error": str(exc)},
         )
+
+
+# --------------------------------------------------------------------------
+# Chat History Import
+# --------------------------------------------------------------------------
+
+
+@router.post("/import/preview")
+async def handle_import_preview(
+    payload: ImportPreviewRequest,
+    container: Annotated[WebContainer, Depends(get_container)],
+) -> Any:
+    """POST /api/import/preview - Perform dry-run parsing and chunking analysis."""
+    try:
+        return container.chat_import_service.generate_preview(
+            data=payload.data,
+            chat_id=payload.chat_id,
+            gap_minutes=payload.gap_minutes,
+            max_messages=payload.max_messages,
+            min_length=payload.min_length,
+        )
+    except Exception as exc:
+        logger.error("Failed to generate chat import preview", error=str(exc))
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+
+
+@router.post("/import/start")
+async def handle_import_start(
+    payload: StartImportRequest,
+    container: Annotated[WebContainer, Depends(get_container)],
+) -> Any:
+    """POST /api/import/start - Start asynchronous chat history import."""
+    try:
+        return await container.chat_import_service.start_import(
+            data=payload.data,
+            chat_id=payload.chat_id,
+            gap_minutes=payload.gap_minutes,
+            max_messages=payload.max_messages,
+            delay=payload.delay,
+            no_db=payload.no_db,
+            min_length=payload.min_length,
+        )
+    except Exception as exc:
+        logger.error("Failed to start chat history import", error=str(exc))
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+
+
+@router.get("/import/status")
+async def handle_import_status(
+    container: Annotated[WebContainer, Depends(get_container)],
+) -> dict[str, Any]:
+    """GET /api/import/status - Get current background import progress."""
+    return container.chat_import_service.get_status()
+
+
+@router.post("/import/cancel")
+async def handle_import_cancel(
+    container: Annotated[WebContainer, Depends(get_container)],
+) -> dict[str, Any]:
+    """POST /api/import/cancel - Cancel active background import task."""
+    return container.chat_import_service.cancel_import()

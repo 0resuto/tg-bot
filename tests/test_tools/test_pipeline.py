@@ -219,6 +219,7 @@ async def test_pipeline_resume(sample_export_file: Path, tmp_path: Path) -> None
 
     summary = await pipeline.run(
         file_path=sample_export_file,
+        chat_id=-1009876543,
         resume=True,
     )
 

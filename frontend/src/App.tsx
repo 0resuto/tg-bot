@@ -20,6 +20,7 @@ import { KnowledgeGraphView } from './views/KnowledgeGraphView';
 import { MemoriesView } from './views/MemoriesView';
 import { ContextView } from './views/ContextView';
 import { AdminView } from './views/AdminView';
+import { ChatImporterView } from './views/ChatImporterView';
 import { LogsView } from './views/LogsView';
 import { SimulatorView } from './views/SimulatorView';
 
@@ -268,6 +269,28 @@ export const App: React.FC = () => {
         pollingError={pollingError}
       />
 
+      {pollingError && (
+        <div className="bg-amber-950/90 border-b border-amber-800/80 px-6 py-2.5 flex items-center justify-between text-xs text-amber-200 z-30 shadow-md">
+          <div className="flex items-center space-x-2.5">
+            <span className="text-base">⚠️</span>
+            <div>
+              <span>
+                <strong>Backend Connection Lost:</strong> {pollingError}. Ensure the FastAPI server is running on port 8080:
+              </span>
+              <code className="ml-2 px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-amber-300 font-mono text-[11px]">
+                uv run python scripts/dashboard_server.py
+              </code>
+            </div>
+          </div>
+          <button
+            onClick={refreshAllData}
+            className="px-3 py-1 bg-amber-800 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold cursor-pointer transition ml-4 shrink-0"
+          >
+            Retry Connection
+          </button>
+        </div>
+      )}
+
       {errorBanner && (
         <ErrorBanner
           title={errorBanner.title}
@@ -318,6 +341,17 @@ export const App: React.FC = () => {
 
           {activeTab === 'context' && (
             <ContextView contextMessages={contextMessages} onRefresh={refreshAllData} />
+          )}
+
+          {activeTab === 'importer' && (
+            <ChatImporterView
+              chats={chats}
+              selectedChatId={selectedChatId}
+              onNavigateToGraph={(chatId) => {
+                setSelectedChatId(chatId);
+                handleSelectTab('graph');
+              }}
+            />
           )}
 
           {activeTab === 'admin' && <AdminView stats={stats} selectedChatId={selectedChatId} />}

@@ -121,3 +121,46 @@ export interface LogEvent {
   bot_reply?: string;
   trigger_reason?: string;
 }
+
+export interface EpisodePreview {
+  episode_index: number;
+  source_user_name: string;
+  reference_time: string;
+  messages_count: number;
+  text: string;
+}
+
+export interface MemberPreview {
+  user_id: number;
+  display_name: string;
+}
+
+export interface ImportPreviewResponse {
+  chat_id: number;
+  chat_title: string;
+  total_raw_messages: number;
+  meaningful_messages: number;
+  dropped_noise_messages: number;
+  noise_percentage: number;
+  total_episodes: number;
+  members_count: number;
+  members: MemberPreview[];
+  sample_episodes: EpisodePreview[];
+}
+
+export interface ImportStatusResponse {
+  status: 'idle' | 'running' | 'completed' | 'failed';
+  total_episodes: number;
+  processed_episodes: number;
+  progress_percent: number;
+  current_stage: string;
+  error?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  last_summary?: {
+    chat_id: number;
+    chat_title: string;
+    total_episodes: number;
+    messages_ingested: number;
+  } | null;
+}

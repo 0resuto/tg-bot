@@ -3,7 +3,7 @@ import { ChatInfo } from '../types';
 import { ChatSelector } from './ChatSelector';
 
 export type TabType =
-  'overview' | 'graph' | 'memories' | 'context' | 'admin' | 'logs' | 'simulator';
+  'overview' | 'graph' | 'memories' | 'context' | 'importer' | 'admin' | 'logs' | 'simulator';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -32,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(
       { id: 'graph' as TabType, label: 'Knowledge Graph', icon: '🕸️' },
       { id: 'memories' as TabType, label: 'Memory Facts', icon: '🧠', badge: factsCount },
       { id: 'context' as TabType, label: 'Redis Context', icon: '💬', badge: messagesCount },
+      { id: 'importer' as TabType, label: 'Chat Importer', icon: '📥' },
       { id: 'admin' as TabType, label: 'Administration', icon: '⚙️' },
       { id: 'logs' as TabType, label: 'Event Logs', icon: '📋' },
     ];

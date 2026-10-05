@@ -36,6 +36,12 @@ def test_telegram_proxy_defaults_to_direct_connection():
     assert settings.telegram_proxy_url == ""
 
 
+def test_openai_response_max_tokens_default():
+    with patch.dict(os.environ, {}, clear=True):
+        settings = Settings(_env_file=None)
+    assert settings.openai_response_max_tokens == 1500
+
+
 def test_telegram_proxy_url_from_env():
     env = {"TELEGRAM_PROXY_URL": "http://user:pass@127.0.0.1:3128"}
     with patch.dict(os.environ, env, clear=True):

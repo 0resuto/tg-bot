@@ -5,7 +5,7 @@ import re
 from typing import TYPE_CHECKING
 
 from bot.log import get_logger
-from bot.models import ChatMessage, LLMProvider, MemoryFact
+from bot.models import ChatMessage, EmptyLLMResponseError, LLMProvider, MemoryFact
 from bot.services.context_builder import ContextBuilder
 from bot.services.memory_service import MemoryService
 
@@ -27,6 +27,7 @@ class ResponseService:
         response_model: str,
         admin_notifier: AdminNotifier | None = None,
         group_chat_id: int = 0,
+        max_response_tokens: int = 1500,
     ) -> None:
         self.llm = llm
         self.memory_service = memory_service
@@ -35,6 +36,7 @@ class ResponseService:
         self.response_model = response_model
         self.admin_notifier = admin_notifier
         self.group_chat_id = group_chat_id
+        self.max_response_tokens = max_response_tokens
 
     async def generate_response(
         self,
@@ -102,12 +104,18 @@ class ResponseService:
 
         # 6. Call LLM provider
         try:
-            return await self.llm.generate_response(
+            response = await self.llm.generate_response(
                 system_prompt=system_prompt,
                 messages=messages,
                 model=self.response_model,
-                max_tokens=250,
+                max_tokens=self.max_response_tokens,
             )
+            if not response or not response.strip():
+                raise EmptyLLMResponseError(
+                    "LLM returned an empty response "
+                    f"(model={self.response_model}, max_tokens={self.max_response_tokens})"
+                )
+            return response.strip()
         except Exception as e:
             logger.error("Error generating LLM response", exc_info=e, chat_id=chat_id)
             if self.admin_notifier:
@@ -116,6 +124,10 @@ class ResponseService:
                         chat_id=chat_id,
                         user_display_name=user_display_name,
                         error=e,
+                        context_info=(
+                            f"Модель: {self.response_model}, "
+                            f"лимит токенов ответа: {self.max_response_tokens}"
+                        ),
                     )
                 except Exception as notify_err:
                     logger.error(

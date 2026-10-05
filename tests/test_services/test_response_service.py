@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from bot.models import ChatMessage
+from bot.models import ChatMessage, EmptyLLMResponseError
 from bot.services.response_service import ResponseService
 from tests.conftest import MockLLMProvider
 
@@ -177,6 +177,96 @@ async def test_generate_response_error_notifies_admin():
     assert call_kwargs["chat_id"] == 777
     assert call_kwargs["user_display_name"] == "Bob"
     assert isinstance(call_kwargs["error"], RuntimeError)
+
+
+async def test_empty_response_notifies_admin_and_returns_fallback():
+    from unittest.mock import AsyncMock, MagicMock
+
+    llm = MockLLMProvider()
+    llm.response_text = "   "
+
+    mock_notifier = MagicMock()
+    mock_notifier.notify_error = AsyncMock()
+
+    class MockEmptyMem:
+        async def get_quick_facts(self, *args, **kwargs):
+            return []
+
+        async def search_memories(self, *args, **kwargs):
+            return []
+
+    svc = ResponseService(
+        llm=llm,
+        memory_service=MockEmptyMem(),
+        context_builder=MockContextBuilder(),
+        persona_prompt="You are a bot.",
+        response_model="test-model",
+        admin_notifier=mock_notifier,
+        max_response_tokens=777,
+    )
+
+    res = await svc.generate_response(
+        chat_id=777, user_display_name="Bob", active_user_names=["Bob"]
+    )
+
+    assert res == "Извините, произошла ошибка при генерации ответа."
+    assert mock_notifier.notify_error.call_count == 1
+    call_kwargs = mock_notifier.notify_error.call_args.kwargs
+    assert isinstance(call_kwargs["error"], EmptyLLMResponseError)
+    assert "empty response" in str(call_kwargs["error"])
+    assert "777" in call_kwargs["context_info"]
+
+
+async def test_empty_response_raises_when_configured():
+    llm = MockLLMProvider()
+    llm.response_text = ""
+
+    class MockEmptyMem:
+        async def get_quick_facts(self, *args, **kwargs):
+            return []
+
+        async def search_memories(self, *args, **kwargs):
+            return []
+
+    svc = ResponseService(
+        llm=llm,
+        memory_service=MockEmptyMem(),
+        context_builder=MockContextBuilder(),
+        persona_prompt="You are a bot.",
+        response_model="test-model",
+    )
+
+    with pytest.raises(EmptyLLMResponseError):
+        await svc.generate_response(
+            chat_id=1,
+            user_display_name="Bob",
+            active_user_names=["Bob"],
+            raise_on_error=True,
+        )
+
+
+async def test_max_response_tokens_is_forwarded():
+    llm = MockLLMProvider()
+
+    class MockEmptyMem:
+        async def get_quick_facts(self, *args, **kwargs):
+            return []
+
+        async def search_memories(self, *args, **kwargs):
+            return []
+
+    svc = ResponseService(
+        llm=llm,
+        memory_service=MockEmptyMem(),
+        context_builder=MockContextBuilder(),
+        persona_prompt="You are a bot.",
+        response_model="test-model",
+        max_response_tokens=3210,
+    )
+
+    await svc.generate_response(chat_id=1, user_display_name="Alice", active_user_names=["Alice"])
+
+    assert llm.calls[0]["max_tokens"] == 3210
 
 
 def test_build_messages_roles_and_sanitization(response_service):

@@ -65,6 +65,10 @@ class MemoryStats:
     last_ingestion_at: datetime | None = None
 
 
+class EmptyLLMResponseError(RuntimeError):
+    """Raised when an LLM provider yields no usable content."""
+
+
 class LLMProvider(Protocol):
     """Abstract LLM chat-completion provider."""
 
@@ -76,7 +80,11 @@ class LLMProvider(Protocol):
         model: str | None = None,
         max_tokens: int = 1024,
     ) -> str:
-        """Generate a chat completion."""
+        """Generate a chat completion.
+
+        Implementations must return a non-empty string or raise
+        :class:`EmptyLLMResponseError` when the model produced no content.
+        """
         ...
 
     async def close(self) -> None:

@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     # -- OpenAI ------------------------------------------------------------
     openai_api_key: str = ""
     openai_response_model: str = "gpt-4o"
+    openai_response_max_tokens: int = 1500
     openai_extraction_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
     openai_timeout_seconds: float = 60.0

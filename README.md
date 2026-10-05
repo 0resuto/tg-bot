@@ -211,6 +211,7 @@ Variables are loaded from `.env`:
 | `ADMIN_CHAT_ID` | `0` | Optional chat ID for error alerts and notifications |
 | `OPENAI_API_KEY` | *required* | OpenAI API Key for embeddings and completions |
 | `OPENAI_RESPONSE_MODEL`| `gpt-4o` | Model used for conversation replies |
+| `OPENAI_RESPONSE_MAX_TOKENS` | `1500` | Maximum completion tokens per reply (includes reasoning tokens) |
 | `OPENAI_EXTRACTION_MODEL`| `gpt-4o-mini` | Model used by Graphiti for entity/relation extraction |
 | `OPENAI_EMBEDDING_MODEL`| `text-embedding-3-small` | Model used for vector embeddings |
 | `POSTGRES_HOST` | `postgres` | PostgreSQL hostname |

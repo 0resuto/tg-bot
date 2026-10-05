@@ -13,7 +13,14 @@ class MockLLMProvider:
         self.response_text = "Mock response"
 
     async def generate_response(self, system_prompt, messages, *, model=None, max_tokens=1024):
-        self.calls.append({"system_prompt": system_prompt, "messages": messages, "model": model})
+        self.calls.append(
+            {
+                "system_prompt": system_prompt,
+                "messages": messages,
+                "model": model,
+                "max_tokens": max_tokens,
+            }
+        )
         return self.response_text
 
 

@@ -13,7 +13,7 @@ from tenacity import (
 )
 
 from bot.log import get_logger
-from bot.models import LLMProvider
+from bot.models import EmptyLLMResponseError, LLMProvider
 
 logger = get_logger(__name__)
 
@@ -69,4 +69,28 @@ class OpenAILLMProvider(LLMProvider):
             messages=api_messages,
             max_completion_tokens=max_tokens,
         )
-        return response.choices[0].message.content or ""
+
+        if not response.choices:
+            raise EmptyLLMResponseError(f"LLM returned no choices (model={target_model})")
+
+        choice = response.choices[0]
+        content = (choice.message.content or "").strip()
+        if not content:
+            finish_reason = getattr(choice, "finish_reason", None)
+            usage = getattr(response, "usage", None)
+            completion_tokens = getattr(usage, "completion_tokens", None) if usage else None
+            raise EmptyLLMResponseError(
+                "LLM returned an empty response "
+                f"(model={target_model}, finish_reason={finish_reason}, "
+                f"completion_tokens={completion_tokens}, max_tokens={max_tokens}); "
+                "the completion token budget may have been exhausted"
+            )
+
+        if getattr(choice, "finish_reason", None) == "length":
+            logger.warning(
+                "LLM response was truncated by the token limit",
+                model=target_model,
+                max_tokens=max_tokens,
+            )
+
+        return content

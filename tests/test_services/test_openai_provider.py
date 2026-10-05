@@ -8,6 +8,7 @@ import openai
 import pytest
 
 from bot.config import Settings
+from bot.models import EmptyLLMResponseError
 from bot.services.llm import OpenAILLMProvider
 
 
@@ -82,6 +83,73 @@ async def test_openai_provider_retries_on_api_timeout():
 
     assert content == "Recovered response"
     assert provider.client.chat.completions.create.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_raises_on_empty_content():
+    """Empty completion content must raise a diagnostic error instead of returning ''."""
+    provider = OpenAILLMProvider(api_key="test-key", default_model="gpt-4o")
+
+    mock_choice = MagicMock()
+    mock_choice.message.content = None
+    mock_choice.finish_reason = "length"
+
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+
+    provider.client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    with pytest.raises(EmptyLLMResponseError) as exc_info:
+        await provider.generate_response(
+            system_prompt="System",
+            messages=[{"role": "user", "content": "Test"}],
+            max_tokens=250,
+        )
+
+    message = str(exc_info.value)
+    assert "empty response" in message
+    assert "gpt-4o" in message
+    assert "length" in message
+    assert "250" in message
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_raises_on_no_choices():
+    """Missing choices must raise a diagnostic error."""
+    provider = OpenAILLMProvider(api_key="test-key", default_model="gpt-4o")
+
+    mock_response = MagicMock()
+    mock_response.choices = []
+
+    provider.client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    with pytest.raises(EmptyLLMResponseError, match="no choices"):
+        await provider.generate_response(
+            system_prompt="System",
+            messages=[{"role": "user", "content": "Test"}],
+        )
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_returns_truncated_content():
+    """Partial content from a length-limited response is still returned."""
+    provider = OpenAILLMProvider(api_key="test-key", default_model="gpt-4o")
+
+    mock_choice = MagicMock()
+    mock_choice.message.content = "Partial answer"
+    mock_choice.finish_reason = "length"
+
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+
+    provider.client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    content = await provider.generate_response(
+        system_prompt="System",
+        messages=[{"role": "user", "content": "Test"}],
+    )
+
+    assert content == "Partial answer"
 
 
 @pytest.mark.asyncio

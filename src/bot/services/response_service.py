@@ -63,11 +63,13 @@ class ResponseService:
             memory_chat_id = self.group_chat_id or chat_id
 
         # 2 & 3. Retrieve Level 1 quick facts and Level 2 deep facts concurrently
-        query_lines = [f"{msg.display_name}: {msg.text}" for msg in context[-5:]] if context else []
-        query_text = "\n".join(query_lines)
+        # The latest message is the actual request. Joining several messages with
+        # display names dilutes the query embedding and pushes relevant facts out
+        # of the semantic top-N, so the deep search uses the request text alone.
+        request_text = context[-1].text if context else ""
+        query_text = request_text
 
         # Detect an explicit period in the latest request (e.g. "за неделю")
-        request_text = context[-1].text if context else ""
         valid_at_range = extract_time_window(request_text, now=datetime.now(UTC), tz=self.timezone)
 
         # Active participants: current speaker first, followed by other conversation participants

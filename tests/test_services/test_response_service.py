@@ -370,6 +370,52 @@ def test_system_prompt_states_when_no_dated_memories_for_period():
     assert "No dated memories were found for the requested period." in prompt
 
 
+async def test_deep_search_query_is_latest_request_only():
+    """Deep search must use the latest request text, not a joined context window."""
+    captured: dict = {}
+
+    class MockCaptureMem:
+        async def get_quick_facts(self, *args, **kwargs):
+            return []
+
+        async def search_memories(self, query, chat_id, valid_at_range=None):
+            captured["query"] = query
+            return []
+
+    class MockContextWithHistory:
+        async def get_context(self, chat_id: int):
+            return [
+                ChatMessage(
+                    chat_id=chat_id,
+                    user_id=2,
+                    text="Предыдущее обсуждение",
+                    timestamp=datetime.now(UTC),
+                    message_id=1,
+                    display_name="Bot",
+                ),
+                ChatMessage(
+                    chat_id=chat_id,
+                    user_id=1,
+                    text="На чем остановились по домену?",
+                    timestamp=datetime.now(UTC),
+                    message_id=2,
+                    display_name="Admin",
+                ),
+            ]
+
+    svc = ResponseService(
+        llm=MockLLMProvider(),
+        memory_service=MockCaptureMem(),  # type: ignore[arg-type]
+        context_builder=MockContextWithHistory(),  # type: ignore[arg-type]
+        persona_prompt="You are a bot.",
+        response_model="test-model",
+    )
+
+    await svc.generate_response(chat_id=1, user_display_name="Admin", active_user_names=["Admin"])
+
+    assert captured["query"] == "На чем остановились по домену?"
+
+
 async def test_requested_period_is_forwarded_to_memory_search():
     """A relative period in the latest message must reach search_memories."""
     from bot.models import MemoryFact

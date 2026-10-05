@@ -383,6 +383,16 @@ uv run pre-commit install
    ```
 6. **Reverse Proxy (Recommended)**: Place Nginx, Traefik, or Caddy with HTTPS and Basic Authentication
    in front of `127.0.0.1:8080` to securely access the Web Dashboard over the internet.
+7. **Backups & maintenance**: Never copy, restore, or delete database files while the containers
+   are running — Neo4j detects the change lazily and may panic days later. Always stop the service
+   first (`docker compose stop neo4j`), do the file-level operation, then start it again. Back up
+   the stopped volume to storage outside the host:
+   ```bash
+   docker compose stop neo4j
+   docker run --rm -v tg-bot_neo4jdata:/data -v /srv/storage/backups:/backup alpine \
+     tar czf /backup/neo4j-$(date +%F-%H%M).tar.gz -C /data .
+   docker compose start neo4j
+   ```
 
 ---
 

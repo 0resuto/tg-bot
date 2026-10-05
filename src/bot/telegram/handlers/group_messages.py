@@ -15,20 +15,26 @@ from bot.config import Settings
 from bot.log import get_logger
 from bot.models import ChatMessage, MemberIdentity
 from bot.telegram.filters import IsGroupChat
+from bot.telegram.formatting import markdown_to_telegram_html
 from bot.telegram.media import extract_message_content
 
 logger = get_logger(__name__)
 
 
 async def safe_reply(message: Message, text: str) -> Message | None:
-    """Safely reply to a message with fallbacks for HTML parsing and deleted messages."""
+    """Safely reply with Markdown converted to Telegram HTML.
+
+    Falls back to sending the raw text without parse mode if Telegram rejects
+    the formatted message and to ``answer`` when the replied message is gone.
+    """
+    html_text = markdown_to_telegram_html(text)
     try:
-        return await message.reply(text)
+        return await message.reply(html_text, parse_mode="HTML")
     except TelegramBadRequest as exc:
         err = str(exc).lower()
         if "reply message not found" in err:
             try:
-                return await message.answer(text)
+                return await message.answer(html_text, parse_mode="HTML")
             except TelegramBadRequest as inner_exc:
                 if "can't parse entities" in str(inner_exc).lower():
                     return await message.answer(text, parse_mode=None)

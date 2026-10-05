@@ -94,7 +94,7 @@ async def test_handle_admin_private_message():
     )
 
     # Verify message.reply was called with bot response
-    message.reply.assert_awaited_once_with("Алиса обожает флэт уайт!")
+    message.reply.assert_awaited_once_with("Алиса обожает флэт уайт!", parse_mode="HTML")
 
     # Verify ResponseService received private chat_id and active user names
     assert len(generate_calls) == 1
@@ -174,6 +174,6 @@ async def test_handle_admin_private_message_with_none_member_repo():
         settings=settings,
     )
 
-    message.reply.assert_awaited_once_with("Hello Admin!")
+    message.reply.assert_awaited_once_with("Hello Admin!", parse_mode="HTML")
     assert context_builder.add_message.call_count == 2
     assert response_service.generate_response.call_args.kwargs["active_user_names"] == ["Admin"]

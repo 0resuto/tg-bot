@@ -140,7 +140,7 @@ async def test_handle_group_message_with_caption_and_mention():
         reply_to_user_id=None,
     )
 
-    message.reply.assert_awaited_once_with("I see your chart!")
+    message.reply.assert_awaited_once_with("I see your chart!", parse_mode="HTML")
     bot_msg: ChatMessage = context_builder.add_message.call_args_list[1][1]["msg"]
     assert bot_msg.text == "I see your chart!"
     assert bot_msg.user_id == 999
@@ -323,7 +323,7 @@ async def test_handle_group_message_reply_saved_to_context():
     )
 
     # Verify message.reply was called and bot response saved
-    message.reply.assert_awaited_once_with("Help is on the way!")
+    message.reply.assert_awaited_once_with("Help is on the way!", parse_mode="HTML")
     assert context_builder.add_message.call_count == 2
     bot_saved_msg: ChatMessage = context_builder.add_message.call_args_list[1][1]["msg"]
     assert bot_saved_msg.text == "Help is on the way!"
@@ -352,6 +352,7 @@ async def test_safe_reply_cant_parse_entities():
     res = await safe_reply(msg, "Text with unclosed <tag>")
     assert res is expected_result
     assert msg.reply.call_count == 2
+    msg.reply.assert_any_await("Text with unclosed &lt;tag&gt;", parse_mode="HTML")
     msg.reply.assert_awaited_with("Text with unclosed <tag>", parse_mode=None)
 
 
@@ -374,7 +375,7 @@ async def test_safe_reply_target_message_deleted():
 
     res = await safe_reply(msg, "Bot response")
     assert res is expected_result
-    msg.answer.assert_awaited_once_with("Bot response")
+    msg.answer.assert_awaited_once_with("Bot response", parse_mode="HTML")
 
 
 @pytest.mark.asyncio

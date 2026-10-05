@@ -39,7 +39,7 @@ class MockMemoryBackend:
     async def search_quick(self, user_name, group_id, *, limit=5):
         return [f for f in self.facts if f.subject_name == user_name][:limit]
 
-    async def search_deep(self, query, group_id, *, limit=15):
+    async def search_deep(self, query, group_id, *, limit=15, valid_at_range=None):
         return self.facts[:limit]
 
     async def get_stats(self, group_id):

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from bot.log import get_logger
 from bot.models import ChatMessage, MemoryBackend, MemoryFact, MemoryStats
 from bot.services.message_filter import MessageNoiseFilter, default_noise_filter
@@ -68,11 +70,19 @@ class MemoryService:
             )
             return []
 
-    async def search_memories(self, query: str, chat_id: int) -> list[MemoryFact]:
-        """Retrieve Level 2 deep memories using semantic search."""
+    async def search_memories(
+        self,
+        query: str,
+        chat_id: int,
+        valid_at_range: tuple[datetime, datetime] | None = None,
+    ) -> list[MemoryFact]:
+        """Retrieve Level 2 deep memories, optionally limited to a time window."""
         try:
             return await self.memory.search_deep(
-                query=query, group_id=str(chat_id), limit=self.search_limit_deep
+                query=query,
+                group_id=str(chat_id),
+                limit=self.search_limit_deep,
+                valid_at_range=valid_at_range,
             )
         except Exception as e:
             logger.error("Error retrieving deep memories", exc_info=e, query=query, chat_id=chat_id)

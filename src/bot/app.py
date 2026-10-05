@@ -115,6 +115,7 @@ async def main() -> None:
         admin_notifier=admin_notifier,
         group_chat_id=settings.group_chat_id,
         max_response_tokens=settings.openai_response_max_tokens,
+        bot_timezone=settings.bot_timezone,
     )
 
     mention_detector: MentionDetector | None = None

@@ -74,3 +74,23 @@ async def test_search_memories(memory_service):
     facts = await memory_service.search_memories("coffee", 1)
     assert len(facts) == 1
     assert facts[0].fact_text == "likes coffee"
+
+
+async def test_search_memories_forwards_time_window():
+    captured = {}
+
+    class CaptureBackend:
+        async def search_deep(self, query, group_id, *, limit=15, valid_at_range=None):
+            captured["query"] = query
+            captured["group_id"] = group_id
+            captured["valid_at_range"] = valid_at_range
+            return []
+
+    svc = MemoryService(memory=CaptureBackend())  # type: ignore[arg-type]
+    window = (datetime(2026, 9, 28), datetime(2026, 10, 5))
+
+    await svc.search_memories("coffee", -100, valid_at_range=window)
+
+    assert captured["query"] == "coffee"
+    assert captured["group_id"] == "-100"
+    assert captured["valid_at_range"] == window

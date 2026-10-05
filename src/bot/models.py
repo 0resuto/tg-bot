@@ -53,6 +53,8 @@ class MemoryFact:
     subject_name: str | None = None
     confidence: float = 1.0
     created_at: datetime | None = None
+    valid_at: datetime | None = None
+    reference_time: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,8 +127,9 @@ class MemoryBackend(Protocol):
         group_id: str,
         *,
         limit: int = 15,
+        valid_at_range: tuple[datetime, datetime] | None = None,
     ) -> list[MemoryFact]:
-        """Level 2 — full semantic search across the knowledge graph."""
+        """Level 2 — full semantic search, optionally limited to a time window."""
         ...
 
     async def get_stats(

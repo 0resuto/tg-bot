@@ -30,6 +30,33 @@ def test_settings_parsing():
         assert "postgresql+psycopg://" in settings.postgres_dsn_sync
 
 
+def test_bot_timezone_defaults_to_moscow():
+    with patch.dict(os.environ, {}, clear=True):
+        settings = Settings(_env_file=None)
+    assert settings.bot_timezone == "Europe/Moscow"
+
+
+def test_bot_timezone_from_env():
+    env = {"BOT_TIMEZONE": "Asia/Tokyo"}
+    with patch.dict(os.environ, env, clear=True):
+        settings = Settings(_env_file=None)
+    assert settings.bot_timezone == "Asia/Tokyo"
+
+
+def test_invalid_bot_timezone_fails_fast():
+    env = {
+        "TELEGRAM_BOT_TOKEN": "123:ABC",
+        "OPENAI_API_KEY": "sk-mock",
+        "POSTGRES_PASSWORD": "pg",
+        "NEO4J_PASSWORD": "neo",
+        "BOT_TIMEZONE": "Mars/Olympus",
+    }
+    with patch.dict(os.environ, env, clear=True):
+        settings = Settings(_env_file=None)
+    with pytest.raises(ValueError, match="BOT_TIMEZONE"):
+        settings.validate_for_bot_runtime()
+
+
 def test_telegram_proxy_defaults_to_direct_connection():
     with patch.dict(os.environ, {}, clear=True):
         settings = Settings(_env_file=None)

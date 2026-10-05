@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
@@ -88,6 +89,13 @@ class Settings(BaseSettings):
     neo4j_password: str = ""
 
     # -- Memory & Behaviour ------------------------------------------------
+    bot_timezone: str = Field(
+        default="Europe/Moscow",
+        description=(
+            "IANA timezone used to render dates in prompts and to interpret "
+            "relative time windows (e.g. 'за неделю')."
+        ),
+    )
     debounce_seconds: float = 10.0
     context_window_minutes: int = 15
     context_min_messages: int = 10
@@ -143,6 +151,17 @@ class Settings(BaseSettings):
 
     def validate_for_bot_runtime(self) -> None:
         """Validate required secrets before starting the Telegram polling bot."""
+        try:
+            ZoneInfo(self.bot_timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError(
+                "\n=================================================================\n"
+                "[FATAL CONFIGURATION ERROR] Telegram Bot cannot start!\n"
+                f"BOT_TIMEZONE is not a valid IANA timezone: {self.bot_timezone!r}\n"
+                "Example: BOT_TIMEZONE=Europe/Moscow\n"
+                "=================================================================\n"
+            ) from None
+
         proxy = self.telegram_proxy_url.strip()
         if proxy:
             scheme = proxy.split("://", 1)[0].lower()

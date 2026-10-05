@@ -225,6 +225,7 @@ Variables are loaded from `.env`:
 | `NEO4J_PASSWORD` | *required* | Neo4j password |
 | `BOT_NAMES` | `Bot` | Comma-separated names the bot responds to (e.g. `Bot, Ista`) |
 | `BOT_PERSONA_PROMPT_FILE` | `prompts/system_prompt.md` | Path to persona prompt markdown file |
+| `BOT_TIMEZONE` | `Europe/Moscow` | IANA timezone for dates in prompts and relative periods (`за неделю`, `last month`) |
 | `DEBOUNCE_SECONDS` | `10.0` | Sliding window in seconds for message debouncing |
 | `CONTEXT_WINDOW_MINUTES`| `15` | Minutes of conversation kept in recent context |
 | `CONTEXT_MIN_MESSAGES` | `10` | Minimum messages guaranteed in recent context buffer |

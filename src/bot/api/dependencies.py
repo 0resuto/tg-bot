@@ -225,6 +225,7 @@ class WebContainer:
                 admin_notifier=self.admin_notifier,
                 group_chat_id=self.settings.group_chat_id,
                 max_response_tokens=self.settings.openai_response_max_tokens,
+                bot_timezone=self.settings.bot_timezone,
             )
 
         # Simulator Service (if enabled)

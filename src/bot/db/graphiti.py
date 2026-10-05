@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from graphiti_core import Graphiti
@@ -12,6 +12,7 @@ from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client.config import LLMConfig
 from graphiti_core.llm_client.openai_client import OpenAIClient
 from graphiti_core.nodes import EpisodeType
+from graphiti_core.search.search_filters import ComparisonOperator, DateFilter, SearchFilters
 from neo4j.exceptions import ServiceUnavailable, SessionExpired, TransientError
 from pydantic import BaseModel, Field
 from tenacity import (
@@ -25,6 +26,10 @@ from bot.log import get_logger
 from bot.models import MemoryBackend, MemoryFact, MemoryStats
 
 logger = get_logger(__name__)
+
+# How many extra candidates to fetch when a time window is applied, so that
+# post-filtering by fact time still has a chance to fill the requested limit.
+_WINDOW_FETCH_MULTIPLIER = 4
 
 NEO4J_TRANSIENT_EXCEPTIONS = (
     ServiceUnavailable,
@@ -143,15 +148,99 @@ class GraphitiMemoryBackend(MemoryBackend):
         return await self.search_deep(f"Key facts about {user_name}", group_id, limit=limit)
 
     @retry_neo4j
-    async def search_deep(self, query: str, group_id: str, *, limit: int = 10) -> list[MemoryFact]:
-        """Perform a deep semantic search."""
+    async def search_deep(
+        self,
+        query: str,
+        group_id: str,
+        *,
+        limit: int = 10,
+        valid_at_range: tuple[datetime, datetime] | None = None,
+    ) -> list[MemoryFact]:
+        """Perform a deep semantic search, optionally limited to a time window.
+
+        When a window is requested, dated facts are filtered server-side by
+        Graphiti (``EntityEdge.valid_at``) so in-window facts are not lost to
+        relevance ranking. Facts with an unknown ``valid_at`` are recovered via
+        a second query and matched by the episode ``reference_time`` (when the
+        fact was mentioned).
+        """
+        if valid_at_range is None:
+            results = await self.client.search(
+                query=query,
+                group_ids=[group_id],
+                num_results=limit,
+            )
+            return self._map_results_to_facts(results)[:limit]
+
+        start, end = valid_at_range
         results = await self.client.search(
             query=query,
             group_ids=[group_id],
             num_results=limit,
+            search_filter=SearchFilters(
+                valid_at=[
+                    [
+                        DateFilter(
+                            date=start,
+                            comparison_operator=ComparisonOperator.greater_than_equal,
+                        ),
+                        DateFilter(
+                            date=end,
+                            comparison_operator=ComparisonOperator.less_than,
+                        ),
+                    ]
+                ]
+            ),
         )
+        facts = [f for f in self._map_results_to_facts(results) if self._in_window(f, start, end)]
 
-        return self._map_results_to_facts(results)
+        if len(facts) < limit:
+            facts = await self._top_up_undated_facts(facts, query, group_id, start, end, limit)
+
+        logger.debug(
+            "search_deep_window",
+            group_id=group_id,
+            start=start.isoformat(),
+            end=end.isoformat(),
+            facts=len(facts),
+        )
+        return facts[:limit]
+
+    async def _top_up_undated_facts(
+        self,
+        facts: list[MemoryFact],
+        query: str,
+        group_id: str,
+        start: datetime,
+        end: datetime,
+        limit: int,
+    ) -> list[MemoryFact]:
+        """Merge in facts without ``valid_at`` whose mention time is in the window."""
+        results = await self.client.search(
+            query=query,
+            group_ids=[group_id],
+            num_results=limit * _WINDOW_FETCH_MULTIPLIER,
+        )
+        seen = {fact.fact_text for fact in facts}
+        for fact in self._map_results_to_facts(results):
+            if len(facts) >= limit:
+                break
+            if fact.valid_at is not None or fact.fact_text in seen:
+                continue
+            if self._in_window(fact, start, end):
+                facts.append(fact)
+                seen.add(fact.fact_text)
+        return facts
+
+    @staticmethod
+    def _in_window(fact: MemoryFact, start: datetime, end: datetime) -> bool:
+        """Return True if the fact's event time falls into [start, end)."""
+        event_time = fact.valid_at or fact.reference_time
+        if event_time is None:
+            return False
+        if event_time.tzinfo is None:
+            event_time = event_time.replace(tzinfo=UTC)
+        return start <= event_time < end
 
     @retry_neo4j
     async def get_stats(self, group_id: str) -> MemoryStats:
@@ -201,6 +290,8 @@ class GraphitiMemoryBackend(MemoryBackend):
                     subject_name=getattr(edge, "name", None),
                     confidence=1.0,
                     created_at=getattr(edge, "created_at", None),
+                    valid_at=getattr(edge, "valid_at", None),
+                    reference_time=getattr(edge, "reference_time", None),
                 )
             )
         return facts

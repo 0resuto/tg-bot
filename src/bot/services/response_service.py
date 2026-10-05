@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import re
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from bot.log import get_logger
 from bot.models import ChatMessage, EmptyLLMResponseError, LLMProvider, MemoryFact
 from bot.services.context_builder import ContextBuilder
 from bot.services.memory_service import MemoryService
+from bot.services.time_window import extract_time_window
 
 if TYPE_CHECKING:
     from bot.services.admin_notifier import AdminNotifier
@@ -28,6 +31,7 @@ class ResponseService:
         admin_notifier: AdminNotifier | None = None,
         group_chat_id: int = 0,
         max_response_tokens: int = 1500,
+        bot_timezone: str = "Europe/Moscow",
     ) -> None:
         self.llm = llm
         self.memory_service = memory_service
@@ -37,6 +41,7 @@ class ResponseService:
         self.admin_notifier = admin_notifier
         self.group_chat_id = group_chat_id
         self.max_response_tokens = max_response_tokens
+        self.timezone = ZoneInfo(bot_timezone)
 
     async def generate_response(
         self,
@@ -61,6 +66,10 @@ class ResponseService:
         query_lines = [f"{msg.display_name}: {msg.text}" for msg in context[-5:]] if context else []
         query_text = "\n".join(query_lines)
 
+        # Detect an explicit period in the latest request (e.g. "за неделю")
+        request_text = context[-1].text if context else ""
+        valid_at_range = extract_time_window(request_text, now=datetime.now(UTC), tz=self.timezone)
+
         # Active participants: current speaker first, followed by other conversation participants
         speaker_name = self._sanitize_name(user_display_name)
         prioritized_users: list[str] = [speaker_name]
@@ -75,7 +84,11 @@ class ResponseService:
         ]
         if query_text:
             tasks.append(
-                self.memory_service.search_memories(query=query_text, chat_id=memory_chat_id)
+                self.memory_service.search_memories(
+                    query=query_text,
+                    chat_id=memory_chat_id,
+                    valid_at_range=valid_at_range,
+                )
             )
 
         results = await asyncio.gather(*tasks, return_exceptions=True) if tasks else []
@@ -97,7 +110,7 @@ class ResponseService:
                 logger.warning("Deep memory search failed", error=str(deep_res))
 
         # 4. Build system prompt
-        system_prompt = self._build_system_prompt(quick_facts, deep_facts)
+        system_prompt = self._build_system_prompt(quick_facts, deep_facts, valid_at_range)
 
         # 5. Build messages list directly from context
         messages = self._build_messages(context, bot_id=bot_id)
@@ -138,10 +151,41 @@ class ResponseService:
             return "Извините, произошла ошибка при генерации ответа."
 
     def _build_system_prompt(
-        self, quick_facts: dict[str, list[MemoryFact]], deep_facts: list[MemoryFact]
+        self,
+        quick_facts: dict[str, list[MemoryFact]],
+        deep_facts: list[MemoryFact],
+        valid_at_range: tuple[datetime, datetime] | None = None,
     ) -> str:
         """Combines persona prompt with memory context section."""
         prompt_parts = [self.persona_prompt]
+
+        local_now = datetime.now(UTC).astimezone(self.timezone)
+        prompt_parts.append(
+            f"\nCurrent date and time: {local_now.strftime('%Y-%m-%d %H:%M')} ({self.timezone.key})"
+        )
+        if valid_at_range is not None:
+            start, end = valid_at_range
+            prompt_parts.append(
+                "Requested period: "
+                f"{self._format_datetime(start, '%Y-%m-%d')} – "
+                f"{self._format_datetime(end, '%Y-%m-%d')} "
+                f"({self.timezone.key})"
+            )
+            prompt_parts.append(
+                "Facts prefixed with a date belong to that date; facts without a date "
+                "are background only and must not be presented as events of the period."
+            )
+            has_period_facts = bool(deep_facts) or any(
+                self._fact_in_window(fact, start, end)
+                for facts in quick_facts.values()
+                for fact in facts
+            )
+            if not has_period_facts:
+                prompt_parts.append(
+                    "No dated memories were found for the requested period. "
+                    "If asked about this period, state that there are no recorded "
+                    "events for it."
+                )
 
         if quick_facts or deep_facts:
             prompt_parts.append("\nWhat you remember about the participants:")
@@ -150,16 +194,36 @@ class ResponseService:
                 safe_user = self._sanitize_name(user_name)
                 prompt_parts.append(f"- {safe_user}:")
                 for fact in facts:
-                    clean_fact = fact.fact_text.replace("\r", " ").replace("\n", " ").strip()
-                    prompt_parts.append(f"  * {clean_fact}")
+                    prompt_parts.append(f"  * {self._format_fact(fact)}")
 
             if deep_facts:
                 prompt_parts.append("- Relevant conversational memories:")
                 for fact in deep_facts:
-                    clean_fact = fact.fact_text.replace("\r", " ").replace("\n", " ").strip()
-                    prompt_parts.append(f"  * {clean_fact}")
+                    prompt_parts.append(f"  * {self._format_fact(fact)}")
 
         return "\n".join(prompt_parts)
+
+    def _format_fact(self, fact: MemoryFact) -> str:
+        """Render a fact with its event date when known, sanitizing newlines."""
+        clean_fact = fact.fact_text.replace("\r", " ").replace("\n", " ").strip()
+        event_time = fact.valid_at or fact.reference_time
+        if event_time is None:
+            return clean_fact
+        return f"[{self._format_datetime(event_time, '%Y-%m-%d')}] {clean_fact}"
+
+    def _fact_in_window(self, fact: MemoryFact, start: datetime, end: datetime) -> bool:
+        """Return True if the fact's known event time falls into [start, end)."""
+        event_time = fact.valid_at or fact.reference_time
+        if event_time is None:
+            return False
+        if event_time.tzinfo is None:
+            event_time = event_time.replace(tzinfo=UTC)
+        return start <= event_time < end
+
+    def _format_datetime(self, dt: datetime, fmt: str) -> str:
+        """Render a datetime in the configured timezone (naive values are UTC)."""
+        aware = dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+        return aware.astimezone(self.timezone).strftime(fmt)
 
     @staticmethod
     def _sanitize_name(name: str) -> str:
@@ -178,9 +242,12 @@ class ResponseService:
         """Converts ChatMessage list to OpenAI-style message dicts."""
         messages: list[dict[str, str]] = []
         for msg in context:
+            timestamp = self._format_datetime(msg.timestamp, "%Y-%m-%d %H:%M")
             if bot_id and msg.user_id == bot_id:
-                messages.append({"role": "assistant", "content": msg.text})
+                messages.append({"role": "assistant", "content": f"[{timestamp}] {msg.text}"})
             else:
                 safe_name = self._sanitize_name(msg.display_name)
-                messages.append({"role": "user", "content": f"{safe_name}: {msg.text}"})
+                messages.append(
+                    {"role": "user", "content": f"[{timestamp}] {safe_name}: {msg.text}"}
+                )
         return messages

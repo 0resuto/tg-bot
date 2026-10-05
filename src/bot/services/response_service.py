@@ -95,12 +95,14 @@ class ResponseService:
 
         results = await asyncio.gather(*tasks, return_exceptions=True) if tasks else []
 
+        memory_unavailable = False
         quick_facts: dict[str, list[MemoryFact]] = {}
         for idx, name in enumerate(prioritized_users):
             res = results[idx]
             if isinstance(res, list) and res:
                 quick_facts[name] = res
             elif isinstance(res, Exception):
+                memory_unavailable = True
                 logger.warning("Quick facts lookup failed", user_name=name, error=str(res))
 
         deep_facts: list[MemoryFact] = []
@@ -109,10 +111,13 @@ class ResponseService:
             if isinstance(deep_res, list):
                 deep_facts = deep_res
             elif isinstance(deep_res, Exception):
+                memory_unavailable = True
                 logger.warning("Deep memory search failed", error=str(deep_res))
 
         # 4. Build system prompt
-        system_prompt = self._build_system_prompt(quick_facts, deep_facts, valid_at_range)
+        system_prompt = self._build_system_prompt(
+            quick_facts, deep_facts, valid_at_range, memory_unavailable
+        )
 
         # 5. Build messages list directly from context
         messages = self._build_messages(context, bot_id=bot_id)
@@ -157,6 +162,7 @@ class ResponseService:
         quick_facts: dict[str, list[MemoryFact]],
         deep_facts: list[MemoryFact],
         valid_at_range: tuple[datetime, datetime] | None = None,
+        memory_unavailable: bool = False,
     ) -> str:
         """Combines persona prompt with memory context section."""
         prompt_parts = [self.persona_prompt]
@@ -177,17 +183,25 @@ class ResponseService:
                 "Facts prefixed with a date belong to that date; facts without a date "
                 "are background only and must not be presented as events of the period."
             )
-            has_period_facts = bool(deep_facts) or any(
-                self._fact_in_window(fact, start, end)
-                for facts in quick_facts.values()
-                for fact in facts
-            )
-            if not has_period_facts:
-                prompt_parts.append(
-                    "No dated memories were found for the requested period. "
-                    "If asked about this period, state that there are no recorded "
-                    "events for it."
+            if not memory_unavailable:
+                has_period_facts = bool(deep_facts) or any(
+                    self._fact_in_window(fact, start, end)
+                    for facts in quick_facts.values()
+                    for fact in facts
                 )
+                if not has_period_facts:
+                    prompt_parts.append(
+                        "No dated memories were found for the requested period. "
+                        "If asked about this period, state that there are no recorded "
+                        "events for it."
+                    )
+
+        if memory_unavailable:
+            prompt_parts.append(
+                "Memory storage is temporarily unavailable right now. Do not claim "
+                "that no events were recorded; tell the user that memory is "
+                "temporarily unavailable and suggest trying again later."
+            )
 
         if quick_facts or deep_facts:
             prompt_parts.append("\nWhat you remember about the participants:")

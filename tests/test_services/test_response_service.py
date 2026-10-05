@@ -370,6 +370,66 @@ def test_system_prompt_states_when_no_dated_memories_for_period():
     assert "No dated memories were found for the requested period." in prompt
 
 
+def test_system_prompt_reports_memory_unavailable_instead_of_no_data():
+    """A backend failure must not be presented as 'no events recorded'."""
+    svc = ResponseService(
+        llm=MockLLMProvider(),
+        memory_service=object(),  # type: ignore[arg-type]
+        context_builder=MockContextBuilder(),  # type: ignore[arg-type]
+        persona_prompt="You are a bot.",
+        response_model="test-model",
+    )
+    window = (
+        datetime(2026, 9, 28, 21, 0, tzinfo=UTC),
+        datetime(2026, 10, 5, 21, 0, tzinfo=UTC),
+    )
+
+    prompt = svc._build_system_prompt({}, [], window, memory_unavailable=True)
+
+    assert "temporarily unavailable" in prompt
+    assert "No dated memories were found" not in prompt
+
+
+async def test_memory_failure_is_flagged_in_generated_prompt():
+    """When memory lookups raise, the prompt must tell the model memory is down."""
+    llm = MockLLMProvider()
+
+    class FailingMem:
+        async def get_quick_facts(self, *args, **kwargs):
+            return []
+
+        async def search_memories(self, *args, **kwargs):
+            raise RuntimeError("neo4j is down")
+
+    class MockContextWithRequest:
+        async def get_context(self, chat_id: int):
+            return [
+                ChatMessage(
+                    chat_id=chat_id,
+                    user_id=1,
+                    text="Что было за последнюю неделю?",
+                    timestamp=datetime.now(UTC),
+                    message_id=1,
+                    display_name="Admin",
+                )
+            ]
+
+    svc = ResponseService(
+        llm=llm,
+        memory_service=FailingMem(),  # type: ignore[arg-type]
+        context_builder=MockContextWithRequest(),  # type: ignore[arg-type]
+        persona_prompt="You are a bot.",
+        response_model="test-model",
+    )
+
+    res = await svc.generate_response(
+        chat_id=1, user_display_name="Admin", active_user_names=["Admin"]
+    )
+
+    assert res == "Mock response"
+    assert "temporarily unavailable" in llm.calls[0]["system_prompt"]
+
+
 async def test_deep_search_query_is_latest_request_only():
     """Deep search must use the latest request text, not a joined context window."""
     captured: dict = {}

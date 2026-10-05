@@ -3,7 +3,13 @@ from __future__ import annotations
 from datetime import datetime
 
 from bot.log import get_logger
-from bot.models import ChatMessage, MemoryBackend, MemoryFact, MemoryStats
+from bot.models import (
+    ChatMessage,
+    MemoryBackend,
+    MemoryFact,
+    MemoryStats,
+    MemoryUnavailableError,
+)
 from bot.services.message_filter import MessageNoiseFilter, default_noise_filter
 
 logger = get_logger(__name__)
@@ -56,7 +62,11 @@ class MemoryService:
             logger.error("Error during memory ingestion", exc_info=e, chat_id=chat_id)
 
     async def get_quick_facts(self, user_name: str, chat_id: int) -> list[MemoryFact]:
-        """Retrieve Level 1 quick facts directly from memory backend."""
+        """Retrieve Level 1 quick facts directly from memory backend.
+
+        Raises :class:`MemoryUnavailableError` when the backend fails, so callers
+        can distinguish "no facts" from "memory is down".
+        """
         try:
             return await self.memory.search_quick(
                 user_name=user_name, group_id=str(chat_id), limit=self.search_limit_quick
@@ -68,7 +78,7 @@ class MemoryService:
                 user_name=user_name,
                 chat_id=chat_id,
             )
-            return []
+            raise MemoryUnavailableError("Memory backend is unavailable") from e
 
     async def search_memories(
         self,
@@ -76,7 +86,11 @@ class MemoryService:
         chat_id: int,
         valid_at_range: tuple[datetime, datetime] | None = None,
     ) -> list[MemoryFact]:
-        """Retrieve Level 2 deep memories, optionally limited to a time window."""
+        """Retrieve Level 2 deep memories, optionally limited to a time window.
+
+        Raises :class:`MemoryUnavailableError` when the backend fails, so callers
+        can distinguish "no facts" from "memory is down".
+        """
         try:
             return await self.memory.search_deep(
                 query=query,
@@ -86,7 +100,7 @@ class MemoryService:
             )
         except Exception as e:
             logger.error("Error retrieving deep memories", exc_info=e, query=query, chat_id=chat_id)
-            return []
+            raise MemoryUnavailableError("Memory backend is unavailable") from e
 
     async def get_stats(self, chat_id: int) -> MemoryStats:
         """Retrieve graph memory statistics."""

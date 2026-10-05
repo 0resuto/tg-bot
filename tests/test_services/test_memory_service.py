@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pytest
 
-from bot.models import ChatMessage, MemoryFact
+from bot.models import ChatMessage, MemoryFact, MemoryUnavailableError
 from bot.services.memory_service import MemoryService
 from tests.conftest import MockMemoryBackend
 
@@ -74,6 +74,22 @@ async def test_search_memories(memory_service):
     facts = await memory_service.search_memories("coffee", 1)
     assert len(facts) == 1
     assert facts[0].fact_text == "likes coffee"
+
+
+async def test_memory_backend_failure_raises_unavailable():
+    class FailingBackend:
+        async def search_quick(self, *args, **kwargs):
+            raise RuntimeError("neo4j down")
+
+        async def search_deep(self, *args, **kwargs):
+            raise RuntimeError("neo4j down")
+
+    svc = MemoryService(memory=FailingBackend())  # type: ignore[arg-type]
+
+    with pytest.raises(MemoryUnavailableError):
+        await svc.get_quick_facts("Alice", 1)
+    with pytest.raises(MemoryUnavailableError):
+        await svc.search_memories("coffee", 1)
 
 
 async def test_search_memories_forwards_time_window():

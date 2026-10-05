@@ -71,6 +71,10 @@ class EmptyLLMResponseError(RuntimeError):
     """Raised when an LLM provider yields no usable content."""
 
 
+class MemoryUnavailableError(RuntimeError):
+    """Raised when the knowledge graph (memory backend) cannot be reached."""
+
+
 class LLMProvider(Protocol):
     """Abstract LLM chat-completion provider."""
 
